@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="stareg-j-cap",  # this is what you pip install
-    version="0.0.1",    # 0.0.x imply that it is unstable
+    version="0.0.2",    # 0.0.x imply that it is unstable
     url="https://github.com/j-cap/stareg",
     author="Jakob Weber",
     author_email="jakobweber@hotmail.com",
@@ -31,9 +31,9 @@ setup(
     long_description_content_type="text/markdown",
     install_requires = [ # describe the used libraries and versions, e.g. pandas, numpy == production 
                          # dependencies -> versions should be as relaxed as possible
-        "pandas ~= 1.0.2",
-        "sklearn ~= 0.0",
-        "plotly ~= 4.5.4"
+        "pandas >= 1.0.2",
+        "sklearn >= 0.0",
+        "plotly >= 4.5.4"
     ],
     extras_require = {  # for optional dependencies, e.g testing 
                         #  -> versions should be as specific as possible 
