@@ -1,0 +1,4 @@
+
+# stareg - STructured Additive REGression
+
+ 
