@@ -10,7 +10,15 @@ setup(
     author="Jakob Weber",
     author_email="jakobweber@hotmail.com",
     description="Implementation of Structured Additive Regression",  # one liner
-    py_modules=["helloworld"], # list of actual python code modules -> this is what is imported
+    py_modules=[
+        "bspline",
+        "penalty_matrix",
+        "smooth",
+        "star_model",
+        "tensorproductspline",
+        "Code_snippets",
+        "TestFunctions"
+        ], # list of actual python code modules -> this is what is imported
     package_dir={"": "src"}, # code is in the src directory
     classifiers=[ # to search for it on PyPI
         "Programming Language :: Python :: 3",
@@ -23,7 +31,7 @@ setup(
     long_description_content_type="text/markdown",
     install_requires = [ # describe the used libraries and versions, e.g. pandas, numpy == production 
                          # dependencies -> versions should be as relaxed as possible
-        "blessings ~= 1.7", 
+        #"blessings ~= 1.7", 
     ],
     extras_require = {  # for optional dependencies, e.g testing 
                         #  -> versions should be as specific as possible 
