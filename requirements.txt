@@ -104,10 +104,6 @@ sklearn==0.0
 -e git+https://github.com/j-cap/stareg.git@ab8e5f3b17b9b1d4792ae4b8a69354b59e749e71#egg=stareg
 statsmodels==0.11.1
 sympy==1.5.1
-tensorboard==2.0.2
-tensorflow==2.0.0
-tensorflow-estimator==2.0.1
-tensorflow-lattice==2.0.3
 termcolor==1.1.0
 terminado==0.8.3
 testpath==0.4.4
