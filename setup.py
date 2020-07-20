@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="stareg",  # this is what you pip install
+    name="stareg-j-cap",  # this is what you pip install
     version="0.0.1",    # 0.0.x imply that it is unstable
     url="https://github.com/j-cap/stareg",
     author="Jakob Weber",
