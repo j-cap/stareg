@@ -67,6 +67,7 @@ class Smooths(B_spline):
             self.penalty_matrix = self.Valley_matrix(basis=self.basis, y_data=y_peak_or_valley)
         else:
             print(f"Penalty {penalty} not implemented!")
+
     
 class TensorProductSmooths(TensorProductSpline):
     """Implementation of the 2d tensor product spline smooth in Additive Models."""

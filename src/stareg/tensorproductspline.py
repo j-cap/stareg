@@ -32,7 +32,7 @@ class TensorProductSpline(B_spline, PenaltyMatrix):
         self.x2 = None
         self.basis = None
         
-    def tensor_product_spline_2d_basis(self, x_basis=None, k1=5, k2=5, print_shapes=False):
+    def tensor_product_spline_2d_basis(self, x_basis=None, k1=5, k2=5, print_shapes=False, type_="quantile"):
         """Calculate the TPS from two 1d B-splines.
         
         Parameters:
@@ -57,8 +57,8 @@ class TensorProductSpline(B_spline, PenaltyMatrix):
         self.k2 = k2
         BSpline_x1 = BSpline(self.x1)
         BSpline_x2 = BSpline(self.x2)
-        BSpline_x1.b_spline_basis(k=self.k1)
-        BSpline_x2.b_spline_basis(k=self.k2)
+        BSpline_x1.b_spline_basis(k=self.k1, type_=type_)
+        BSpline_x2.b_spline_basis(k=self.k2, type_=type_)
         
         #BSpline_x1.plot_basis("1st B-Spline basis")
         #BSpline_x2.plot_basis("2nd B-Spline basis")

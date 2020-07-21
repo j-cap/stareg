@@ -14,12 +14,14 @@
 import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
+import pprint
 from numpy.linalg import lstsq
 from scipy.linalg import block_diag
 from scipy.signal import find_peaks
 from sklearn.metrics import mean_squared_error
 from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_X_y, check_is_fitted
+from sklearn.model_selection import ParameterGrid
 
 from .smooth import Smooths as s
 from .smooth import TensorProductSmooths as tps
@@ -33,9 +35,9 @@ class StarModel(BaseEstimator):
         """
         descr : tuple - ever entry describens one part of 
                         the model, e.g.
-                        descr =( ("s(1)", "smooth", 25, (1, 100)),
-                                 ("s(2)", "inc", 25, (1, 100)), 
-                                 ("t(1,2)", "tps", [5,5], (1, 100)), 
+                        descr =( ("s(1)", "smooth", 25, (1, 100), "equidistant"),
+                                 ("s(2)", "inc", 25, (1, 100), "quantile"), 
+                                 ("t(1,2)", "tps", [5,5], (1, 100), "quantile"), 
                                )
                         with the scheme: (type of smooth, type of penalty, 
                                           number of knots, lambdas),
@@ -46,15 +48,21 @@ class StarModel(BaseEstimator):
         self.description_str = descr
         self.description_dict = {
             t: {"constraint": p, "n_param": n, 
-                "lambda" : {"smoothness": l[0], "constraint": l[1]}
+                "lambda" : {"smoothness": l[0], "constraint": l[1]},
+                "knot_type": k
                } 
-            for t, p, n, l  in self.description_str}
+            for t, p, n, l, k  in self.description_str}
         self.smooths = None
         self.coef_ = None
         self.y = None
         self.X = None
         
-    def create_basis(self, X, y=None, type_="quantile"):
+    def __str__(self):
+        pp = pprint.PrettyPrinter()
+        return pp.pformat(self.description_dict)
+
+    
+    def create_basis(self, X, y=None):
         """Create the unpenalized BSpline basis for the data X.
         
         Parameters:
@@ -81,7 +89,7 @@ class StarModel(BaseEstimator):
                         y_peak_or_valley=y,
                         lam_s=v["lambda"]["smoothness"],
                         lam_c=v["lambda"]["constraint"],
-                        type_=type_
+                        type_=v["knot_type"]
                     )
                 )
             elif k[0] is "t":
@@ -91,7 +99,8 @@ class StarModel(BaseEstimator):
                         n_param=list(v["n_param"]), 
                         penalty=v["constraint"],
                         lam_s=v["lambda"]["smoothness"],
-                        lam_c=v["lambda"]["constraint"]
+                        lam_c=v["lambda"]["constraint"],
+                        type_=v["knot_type"]
                     )
                 )    
         
@@ -104,9 +113,9 @@ class StarModel(BaseEstimator):
         n_coef_cumsum = np.cumsum(n_coef_list)
         self.coef_list = n_coef_cumsum
         
-        X_fit = np.copy(X)
-        X_fit.sort(axis=0)
-        self.X_fit = X_fit
+        #X_fit = np.copy(X)
+        #X_fit.sort(axis=0)
+        #self.X_fit = X_fit
         
         return 
     
@@ -134,9 +143,7 @@ class StarModel(BaseEstimator):
         self.X_pred = X
         
         return
-                                    
-                                    
-                                    
+                                                               
     def create_penalty_block_matrix(self, beta_test=None):
         """Create the penalty block matrix specified in self.description_str.
         
@@ -151,7 +158,6 @@ class StarModel(BaseEstimator):
         Parameters:
         ---------------
         beta_test  : array  - Test beta for sanity checks.
-        lam_c      : array  - Array of lambdas for the different constraints. 
         
         TODO:
             [x]  include the weights !!! 
@@ -176,30 +182,16 @@ class StarModel(BaseEstimator):
             D = smooth.penalty_matrix
             V = check_constraint(beta=b, constraint=smooth.penalty, y=self.y, basis=smooth.basis)
             
-            penalty_matrix_list.append(smooth.lam_constraint * D.T @ V @ D )
+            penalty_matrix_list.append(np.sqrt(smooth.lam_constraint) * D.T @ V @ D )
             idx += n
             
         #self.penalty_matrix_list_and_weight = np.concatenate(penalty_matrix_list, axis=1)
         self.penalty_matrix_list = penalty_matrix_list
         self.penalty_block_matrix = block_diag(*penalty_matrix_list)
 
-        return
-       
-    def calc_y_pred_and_mse(self, y):
-        """Calculates y_pred and prints the MSE.
-        
-        Parameters:
-        --------------
-        y : array    - target values for training data.
-        """
-        assert (self.coef_ is not None), "Model is untrained, run Model.fit(X, y) first!"
-        y_fit = self.basis @ self.coef_
-        mse = mean_squared_error(y, y_fit)
-        print(f"Mean squared error on data for unconstrained LS fit: {np.round(mse, 4)}")
-        return y_fit, mse
+        return  
     
-    
-    def fit(self, X, y, lam_c=1, plot_=True, max_iter=5, type_="quantile"):
+    def fit(self, X, y, plot_=True, max_iter=5):
         """Lstsq fit using Smooths.
         
         Parameters:
@@ -221,7 +213,7 @@ class StarModel(BaseEstimator):
         
         self.X, self.y = X, y.ravel()
         # create the basis for the initial fit without penalties
-        self.create_basis(X=self.X, y=self.y, type_=type_)    
+        self.create_basis(X=self.X, y=self.y)    
 
         fitting = lstsq(a=self.basis, b=y, rcond=None)
         beta_0 = fitting[0].ravel()
@@ -330,6 +322,77 @@ class StarModel(BaseEstimator):
         
         return pred
     
+    def calc_hat_matrix(self):
+        """Calculates the hat or smoother matrix according to
+            S = Z (Z'Z + P'P) Z'
+
+        Returns:
+        ------------
+        S : np.ndarray    - hat or smoother matrix of size n_data x n_data
+
+        """
+        if hasattr(self, "basis") and hasattr(self, "penalty_block_matrix"):
+            Z = self.basis
+            P = self.penalty_block_matrix
+            S = Z @ np.linalg.pinv(Z.T @ Z + P.T @ P) @ Z.T
+        else:
+            print("Fit the model to data!")
+        return S
+
+    def calc_GCV_score(self):
+        """Calculate the generalized cross validation score according to Fahrmeir, Regression 2013 p.480
+        
+        Returns:
+        ------------
+        GCV : float  - generalized cross validation score
+        
+        """
+        y = self.y
+        y_hat = self.basis @ self.coef_
+        n = y.shape[0]
+        trace = np.trace(self.calc_hat_matrix())
+        GCV = (1/n) * np.sum((y.ravel() - y_hat.ravel())**2 / (1 - trace/n))
+        return GCV
+
+    def calc_GCV(self, n_grid=5):
+        """Carry out a cross validation for the model.
+
+        Parameters:
+        -------------
+        n_grid  : int    - size of the gird per hyperparameter
+
+        """
+
+        # generate dictionary of all hyperparameters (2 per smooth/tps)
+        params = dict()
+        for k,v in self.description_dict.items():
+            lam = v["lambda"]
+            for k_lam, v_lam in lam.items():
+                params[k[0]+k[2]+k_lam[0]] = v_lam
+        # generate list of test values according to the type of constraint
+        for k,v in params.items():
+            if k[-1] is "s":
+                params[k] = np.geomspace(1e-4, 10, 5, endpoint=False)
+            elif k[-1] is "c":
+                params[k] = np.geomspace(1, 1e6, 5)     
+
+        grid = ParameterGrid(params)
+        
+
+    def calc_y_pred_and_mse(self, y):
+        """Calculates y_pred and prints the MSE.
+        
+        Parameters:
+        --------------
+        y : array    - target values for training data.
+        """
+        assert (self.coef_ is not None), "Model is untrained, run Model.fit(X, y) first!"
+        y_fit = self.basis @ self.coef_
+        mse = mean_squared_error(y, y_fit)
+        print(f"Mean squared error on data for unconstrained LS fit: {np.round(mse, 4)}")
+        return y_fit, mse   
+
+
     #def get_params(self, deep=True):
     #    """Returns a dict of __init__ parameters. If deep==True, also return 
     #        parameters of sub-estimators (can be ignored)

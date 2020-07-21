@@ -90,7 +90,10 @@ class B_spline(PenaltyMatrix):
             # dx = xk[-1] - xk[-2]
         elif type_ is "equidistant":
             xk = np.linspace(x.min(), x.max(), k-m)
-            
+        else:
+            print("Knot placement type is not supported!!!")
+            print("Either 'quantile' or 'equidistant'!")
+
         dx = np.min(np.diff(xk))
         xk = np.insert(xk, 0, np.arange(xmin-(m+1)*dx, xmin, dx))    
         xk = np.append(xk, np.arange(xmax+dx, xmax+(m+2)*dx, dx))
