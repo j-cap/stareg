@@ -84,7 +84,9 @@ class B_spline(PenaltyMatrix):
         
         xmin, xmax = np.min(x), np.max(x)
         xk = np.quantile(a=x, q=np.linspace(0,1,k - m))
-        dx = xk[-1] - xk[-2]
+        # change definition of dx to minimum knot difference for more robustness
+        # dx = xk[-1] - xk[-2]
+        dx = np.min(np.diff(xk))
         xk = np.insert(xk, 0, np.arange(xmin-(m+1)*dx, xmin, dx))    
         xk = np.append(xk, np.arange(xmax+dx, xmax+(m+3)*dx, dx))
         
