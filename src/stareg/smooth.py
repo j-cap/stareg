@@ -21,7 +21,7 @@ from .tensorproductspline import TensorProductSpline
 class Smooths(B_spline):
     """Implementation of the 1d smooth used in Additive Models."""
 
-    def __init__(self, x_data, n_param, penalty="smooth", y_peak_or_valley=None, lam_c=None, lam_s=None):
+    def __init__(self, x_data, n_param, penalty="smooth", y_peak_or_valley=None, lam_c=None, lam_s=None, type_="quantile"):
         """Create the B-spline basis as well as the penalty matrices for the penalty.
         
         Parameters:
@@ -35,6 +35,7 @@ class Smooths(B_spline):
         lam_c   : float                                   - Smoothing parameter value for the constraint. 
         lam_s   : float                                   - Smoothing parameter value for the smoothness
                                                             penalty.
+        type_   : str    : "quantile" or "equidistant"    - describes the knot placement
         -------------------
         """
         self.x_data = x_data
@@ -43,7 +44,7 @@ class Smooths(B_spline):
         self.lam_constraint = lam_c
         self.lam_smooth = lam_s
         self.bspline = B_spline()
-        self.b_spline_basis(x_basis=self.x_data, k=self.n_param)
+        self.b_spline_basis(x_basis=self.x_data, k=self.n_param, type_=type_)
         
         # Sanity check for peak/valley penalty
         if penalty is "peak" or penalty is "valley":

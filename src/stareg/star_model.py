@@ -29,13 +29,6 @@ from .penalty_matrix import PenaltyMatrix
 
 class StarModel(BaseEstimator):
     
-    possible_penalties = { "smooth": PenaltyMatrix().D2_difference_matrix, 
-                           "inc": PenaltyMatrix().D1_difference_matrix,
-                           "dec": PenaltyMatrix().D1_difference_matrix,
-                           "conc": PenaltyMatrix().D2_difference_matrix, 
-                           "conv": PenaltyMatrix().D2_difference_matrix,
-                           "peak": None }
-    
     def __init__(self, descr):
         """
         descr : tuple - ever entry describens one part of 
@@ -61,7 +54,7 @@ class StarModel(BaseEstimator):
         self.y = None
         self.X = None
         
-    def create_basis(self, X, y=None):
+    def create_basis(self, X, y=None, type_="quantile"):
         """Create the unpenalized BSpline basis for the data X.
         
         Parameters:
@@ -69,6 +62,7 @@ class StarModel(BaseEstimator):
         X : np.ndarray - data
         y : np.ndarray or None  - For peak/valley penalty. 
                                   Catches assertion if None and peak or valley penalty. 
+        type_ : str  - "quantile" or "equidistant"  - describes the knot placement
         TODO:
             [x] include TPS
         
@@ -86,7 +80,8 @@ class StarModel(BaseEstimator):
                         penalty=v["constraint"], 
                         y_peak_or_valley=y,
                         lam_s=v["lambda"]["smoothness"],
-                        lam_c=v["lambda"]["constraint"]
+                        lam_c=v["lambda"]["constraint"],
+                        type_=type_
                     )
                 )
             elif k[0] is "t":
@@ -204,13 +199,16 @@ class StarModel(BaseEstimator):
         return y_fit, mse
     
     
-    def fit(self, X, y, lam_c=1, plot_=True, max_iter=5):
+    def fit(self, X, y, lam_c=1, plot_=True, max_iter=5, type_="quantile"):
         """Lstsq fit using Smooths.
         
         Parameters:
         -------------
         X : pd.DataFrame or np.ndarray
         y : pd.DataFrame or np.array
+        max_iter : int          - maximal iteration of the reweighted LS
+        type_ : "quantile" or "equidistant"    - knot placement 
+
         plot_ : boolean
         
         TODO:
@@ -223,7 +221,7 @@ class StarModel(BaseEstimator):
         
         self.X, self.y = X, y.ravel()
         # create the basis for the initial fit without penalties
-        self.create_basis(X=self.X, y=self.y)    
+        self.create_basis(X=self.X, y=self.y, type_=type_)    
 
         fitting = lstsq(a=self.basis, b=y, rcond=None)
         beta_0 = fitting[0].ravel()

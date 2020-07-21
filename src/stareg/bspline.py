@@ -45,7 +45,7 @@ class B_spline(PenaltyMatrix):
             z1 = (k[i+m+2] - self.x) / (k[i+m+2] - k[i+1])
             return z0*self.b_spline(k, i, m-1) + z1*self.b_spline(k, i+1, m-1)
                 
-    def b_spline_basis(self, x_basis=None, k=10, m=2):
+    def b_spline_basis(self, x_basis=None, k=10, m=2, type_="quantile"):
         """Set up model matrix for the B-spline basis.
         One needs k + m + 1 knots for a spline basis of order m with k parameters. 
         If self.x is defined, x_basis is not used!
@@ -56,6 +56,7 @@ class B_spline(PenaltyMatrix):
         m : interger  - specifies the order of the spline, m+1 = order
         x_basis : None, ndarray - for the case that no x was defined
                                   in the initialization of the BSpline
+        type_ : string  - either "quantile" or "equidistant"
         
         """
         # check_if_none(self.x, x_basis, self)
@@ -83,12 +84,16 @@ class B_spline(PenaltyMatrix):
         X = np.zeros((n, k))
         
         xmin, xmax = np.min(x), np.max(x)
-        xk = np.quantile(a=x, q=np.linspace(0,1,k - m))
-        # change definition of dx to minimum knot difference for more robustness
-        # dx = xk[-1] - xk[-2]
+        if type_ is "quantile":
+            xk = np.quantile(a=x, q=np.linspace(0,1,k - m))
+            # change definition of dx to minimum knot difference for more robustness
+            # dx = xk[-1] - xk[-2]
+        elif type_ is "equidistant":
+            xk = np.linspace(x.min(), x.max(), k-m)
+            
         dx = np.min(np.diff(xk))
         xk = np.insert(xk, 0, np.arange(xmin-(m+1)*dx, xmin, dx))    
-        xk = np.append(xk, np.arange(xmax+dx, xmax+(m+3)*dx, dx))
+        xk = np.append(xk, np.arange(xmax+dx, xmax+(m+2)*dx, dx))
         
         for i in range(k):
             X[:,i] = self.b_spline(k=xk, i=i, m=m)
