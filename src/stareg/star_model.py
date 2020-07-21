@@ -18,6 +18,8 @@ from numpy.linalg import lstsq
 from scipy.linalg import block_diag
 from scipy.signal import find_peaks
 from sklearn.metrics import mean_squared_error
+from sklearn.base import BaseEstimator
+from sklearn.utils.validation import check_X_y, check_is_fitted
 
 from .smooth import Smooths as s
 from .smooth import TensorProductSmooths as tps
@@ -25,7 +27,7 @@ from .tensorproductspline import TensorProductSpline as t
 from .bspline import B_spline as b
 from .penalty_matrix import PenaltyMatrix
 
-class StarModel():
+class StarModel(BaseEstimator):
     
     possible_penalties = { "smooth": PenaltyMatrix().D2_difference_matrix, 
                            "inc": PenaltyMatrix().D1_difference_matrix,
@@ -38,11 +40,12 @@ class StarModel():
         """
         descr : tuple - ever entry describens one part of 
                         the model, e.g.
-                        descr =( ("s(1)", "smooth", 10, 1),
-                                 ("s(2)", "inc", 10, 1), 
-                                 ("t(1,2)", "tps", [5,5], 1) 
+                        descr =( ("s(1)", "smooth", 25, (1, 100)),
+                                 ("s(2)", "inc", 25, (1, 100)), 
+                                 ("t(1,2)", "tps", [5,5], (1, 100)), 
                                )
-                        with the scheme: (type of smooth, number of knots)
+                        with the scheme: (type of smooth, type of penalty, 
+                                          number of knots, lambdas),
                
         TODO:
             [x] incorporate tensor product splines
@@ -215,6 +218,9 @@ class StarModel():
             [x] incorporate TPS in the iterative fit
         """
         
+        # Check that X and y have correct shape
+        X, y = check_X_y(X, y)
+        
         self.X, self.y = X, y.ravel()
         # create the basis for the initial fit without penalties
         self.create_basis(X=self.X, y=self.y)    
@@ -303,7 +309,6 @@ class StarModel():
             
         return y_fit
     
-    # not trusted
     def predict(self, X):
         """Prediction of the trained model on the data in X.
         
@@ -316,15 +321,25 @@ class StarModel():
         pred : array  - Returns the predicted values. 
         """
         
-        if self.coef_ is None:
-            print("Model untrained!")
-            return
+        check_is_fitted(self)
+        #if self.coef_ is None:
+        #    print("Model untrained!")
+        #    return
         
         self.X_pred = np.copy(X)
         self.create_basis_for_prediction()
         pred = self.basis_for_prediction @ self.coef_
         
         return pred
+    
+    #def get_params(self, deep=True):
+    #    """Returns a dict of __init__ parameters. If deep==True, also return 
+    #        parameters of sub-estimators (can be ignored)
+    #    """
+    #    return {"descr": self.descr}
+    
+    #def set_params(self,**params):
+    #    """Takes a dict as input of the form """
     
     def plot_xy(self, x, y, title="Titel", name="Data", xlabel="xlabel", ylabel="ylabel"):
         """Basic plotting function."""
