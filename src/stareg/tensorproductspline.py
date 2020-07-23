@@ -55,8 +55,8 @@ class TensorProductSpline(B_spline, PenaltyMatrix):
         
         self.k1 = k1
         self.k2 = k2
-        BSpline_x1 = BSpline(self.x1)
-        BSpline_x2 = BSpline(self.x2)
+        BSpline_x1 = B_spline(self.x1)
+        BSpline_x2 = B_spline(self.x2)
         BSpline_x1.b_spline_basis(k=self.k1, type_=type_)
         BSpline_x2.b_spline_basis(k=self.k2, type_=type_)
         

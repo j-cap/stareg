@@ -39,7 +39,7 @@ class StarModel(BaseEstimator):
                                  ("s(2)", "inc", 25, (1, 100), "quantile"), 
                                  ("t(1,2)", "tps", [5,5], (1, 100), "quantile"), 
                                )
-                        with the scheme: (type of smooth, type of penalty, 
+                        with the scheme: (type of smooth, type of constraint, 
                                           number of knots, lambdas),
                
         TODO:
@@ -48,7 +48,7 @@ class StarModel(BaseEstimator):
         self.description_str = descr
         self.description_dict = {
             t: {"constraint": p, "n_param": n, 
-                "lambda" : {"smoothness": l[0], "constraint": l[1]},
+                "lam" : {"smoothness": l[0], "constraint": l[1]},
                 "knot_type": k
                } 
             for t, p, n, l, k  in self.description_str}
@@ -85,10 +85,10 @@ class StarModel(BaseEstimator):
                     s(
                         x_data=X[:,int(k[2])-1], 
                         n_param=v["n_param"], 
-                        penalty=v["constraint"], 
+                        constraint=v["constraint"], 
                         y_peak_or_valley=y,
-                        lam_s=v["lambda"]["smoothness"],
-                        lam_c=v["lambda"]["constraint"],
+                        lam_s=v["lam"]["smoothness"],
+                        lam_c=v["lam"]["constraint"],
                         type_=v["knot_type"]
                     )
                 )
@@ -97,16 +97,16 @@ class StarModel(BaseEstimator):
                     tps(
                         x_data=X[:, [int(k[2])-1, int(k[4])-1]], 
                         n_param=list(v["n_param"]), 
-                        penalty=v["constraint"],
-                        lam_s=v["lambda"]["smoothness"],
-                        lam_c=v["lambda"]["constraint"],
+                        constraint=v["constraint"],
+                        lam_s=v["lam"]["smoothness"],
+                        lam_c=v["lam"]["constraint"],
                         type_=v["knot_type"]
                     )
                 )    
         
         self.basis = np.concatenate([smooth.basis for smooth in self.smooths], axis=1) 
                
-        self.smoothness_penalty_list = [np.sqrt(s.lam_smooth) * s.Smoothness_matrix() for s in self.smooths]
+        self.smoothness_penalty_list = [np.sqrt(s.lam["smoothness"]) * s.Smoothness_matrix(n_param=s.n_param) for s in self.smooths]
         self.smoothness_penalty_matrix = block_diag(*self.smoothness_penalty_list)
 
         n_coef_list = [0] + [np.product(smooth.n_param) for smooth in self.smooths]
@@ -180,9 +180,9 @@ class StarModel(BaseEstimator):
             b = beta_test[idx:idx+n]
             
             D = smooth.penalty_matrix
-            V = check_constraint(beta=b, constraint=smooth.penalty, y=self.y, basis=smooth.basis)
+            V = check_constraint(beta=b, constraint=smooth.constraint, y=self.y, basis=smooth.basis)
             
-            penalty_matrix_list.append(np.sqrt(smooth.lam_constraint) * D.T @ V @ D )
+            penalty_matrix_list.append(np.sqrt(smooth.lam["constraint"]) * D.T @ V @ D )
             idx += n
             
         #self.penalty_matrix_list_and_weight = np.concatenate(penalty_matrix_list, axis=1)
@@ -296,6 +296,8 @@ class StarModel(BaseEstimator):
 
             fig.update_layout(autosize=False, width=500, height=500)
             fig.show()
+        
+        print(f"Violated Constraints: {np.sum(check_constraint_full_model(self))} from {len(self.coef_)} ")
             
         return y_fit
     
@@ -354,6 +356,7 @@ class StarModel(BaseEstimator):
         GCV = (1/n) * np.sum((y.ravel() - y_hat.ravel())**2 / (1 - trace/n))
         return GCV
 
+    
     def calc_GCV(self, n_grid=5):
         """Carry out a cross validation for the model.
 
@@ -365,19 +368,43 @@ class StarModel(BaseEstimator):
 
         # generate dictionary of all hyperparameters (2 per smooth/tps)
         params = dict()
-        for k,v in self.description_dict.items():
-            lam = v["lambda"]
-            for k_lam, v_lam in lam.items():
-                params[k[0]+k[2]+k_lam[0]] = v_lam
-        # generate list of test values according to the type of constraint
+        for k in list(self.description_dict):
+            for k2, v2 in self.description_dict[k]["lam"].items():
+                params[k+"_"+k2] = v2        
+
         for k,v in params.items():
-            if k[-1] is "s":
-                params[k] = np.geomspace(1e-4, 10, 5, endpoint=False)
-            elif k[-1] is "c":
-                params[k] = np.geomspace(1, 1e6, 5)     
+            spacing = np.geomspace(1e-4, 1000, 7, endpoint=False)
+            lam_type = k[k.find("_")+1]
+            if lam_type is "s":
+                params[k] = spacing
+            elif lam_type is "c":
+                params[k] = spacing * 1e6
 
         grid = ParameterGrid(params)
+        gcv_scores = []
+        violated_constraints_list = []
+
+        for idx, params in enumerate(grid):
+            for k,v in params.items():
+                for k2, v2 in self.description_dict.items():
+                    if k[:k.find("_")] == k2:
+                        self.description_dict[k2]["lam"][k[k.find("_")+1:]] = v
+            
+            self.fit(X=self.X, y=self.y.ravel())
+
+            ccfm = check_constraint_full_model(M1)
+            gcv_new = M1.calc_GCV_score()
+            
+            # add a penalty for violating constraints
+            gcv_new += (np.sum(ccfm) / len(M1.coef_))
+            gcv_scores.append(gcv_new)
+            violated_constraints_list.append(ccfm)
+
         
+        print(f"Best fit parameter according to adapted-GCV score: {list(grid)[np.argmin(gcv_scores)]}")
+        print(f"Violated Constraints: {violated_constraints_list[np.argmin(gcv_scores)]} from ")
+        return list(grid)[np.argmin(gcv_scores)]
+            
 
     def calc_y_pred_and_mse(self, y):
         """Calculates y_pred and prints the MSE.
@@ -388,19 +415,32 @@ class StarModel(BaseEstimator):
         """
         assert (self.coef_ is not None), "Model is untrained, run Model.fit(X, y) first!"
         y_fit = self.basis @ self.coef_
-        mse = mean_squared_error(y, y_fit)
+        mse = mean_squared_error(y, y_fit) 
         print(f"Mean squared error on data for unconstrained LS fit: {np.round(mse, 4)}")
         return y_fit, mse   
 
 
-    #def get_params(self, deep=True):
-    #    """Returns a dict of __init__ parameters. If deep==True, also return 
-    #        parameters of sub-estimators (can be ignored)
-    #    """
-    #    return {"descr": self.descr}
-    
-    #def set_params(self,**params):
-    #    """Takes a dict as input of the form """
+    def get_params(self, deep=True):
+        """Returns a dict of __init__ parameters. If deep==True, also return 
+            parameters of sub-estimators (can be ignored)
+        """
+        return self.description_dict
+
+    def set_params(self, params):
+        """Sets the parameters of the object to the given in params.
+        Use self.get_params() as template
+
+        Parameters:
+        -----------
+
+        params : dict of dict          : should have the form of self.get_params
+        
+        """
+        for smooth, param  in zip(self.smooths, params.items()):
+            for key, value in param[1].items():
+                if hasattr(smooth, key):
+                    setattr(smooth, str(key), value)
+        return 
     
     def plot_xy(self, x, y, title="Titel", name="Data", xlabel="xlabel", ylabel="ylabel"):
         """Basic plotting function."""
@@ -510,8 +550,8 @@ def check_constraint_full_model(model):
 
     for i, smooth in enumerate(model.smooths):
         beta = model.coef_[model.coef_list[i]:model.coef_list[i+1]]
-        penalty = smooth.penalty
-        V = check_constraint(beta, constraint=penalty, y=model.y, basis=model.basis)
+        constraint = smooth.constraint
+        V = check_constraint(beta, constraint=constraint, y=model.y, basis=model.basis)
         v += list(np.diag(V))
     
     return np.array(v, dtype=np.int)    

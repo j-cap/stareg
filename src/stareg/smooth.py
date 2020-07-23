@@ -21,14 +21,14 @@ from .tensorproductspline import TensorProductSpline
 class Smooths(B_spline):
     """Implementation of the 1d smooth used in Additive Models."""
 
-    def __init__(self, x_data, n_param, penalty="smooth", y_peak_or_valley=None, lam_c=None, lam_s=None, type_="quantile"):
-        """Create the B-spline basis as well as the penalty matrices for the penalty.
+    def __init__(self, x_data, n_param, constraint="smooth", y_peak_or_valley=None, lam_c=None, lam_s=None, type_="quantile"):
+        """Create the B-spline basis as well as the penalty matrices for the constraint.
         
         Parameters:
         -------------------
         x_data  : array of shape (len(x_data), )          - Values to build the B-spline basis for.
         n_param : int                                     - Number of B-Splines to use for the basis.
-        penalty : string                                  - Type of penalty, one of "smooth", "inc", "dec"
+        constraint : string                               - Type of constraint, one of "smooth", "inc", "dec"
                                                             "conv", "conc", "peak", "valley".
         y_peak_or_valley : array of shape (len(x_data), ) - Response variable values to search for the peak
                                                             or valley, respectively. 
@@ -40,67 +40,70 @@ class Smooths(B_spline):
         """
         self.x_data = x_data
         self.n_param = n_param
-        self.penalty = penalty
-        self.lam_constraint = lam_c
-        self.lam_smooth = lam_s
+        self.constraint = constraint
+        self.lam = {"smoothness": lam_s, "constraint":lam_c}
+        self.knot_type = type_
         self.bspline = B_spline()
         self.b_spline_basis(x_basis=self.x_data, k=self.n_param, type_=type_)
         
         # Sanity check for peak/valley penalty
-        if penalty is "peak" or penalty is "valley":
+        if constraint is "peak" or constraint is "valley":
             assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
         
         # Create the penalty matrix for the given penalty
-        if penalty is "inc":
+        if constraint is "inc":
             self.penalty_matrix = self.D1_difference_matrix()
-        elif penalty is "dec":
+        elif constraint is "dec":
             self.penalty_matrix = -1 * self.D1_difference_matrix() 
-        elif penalty is "conv":
+        elif constraint is "conv":
             self.penalty_matrix = self.D2_difference_matrix()
-        elif penalty is "conc":
+        elif constraint is "conc":
             self.penalty_matrix = -1 * self.D2_difference_matrix()
-        elif penalty is "smooth":
+        elif constraint is "smooth":
             self.penalty_matrix = self.Smoothness_matrix()
-        elif penalty is "peak":
+        elif constraint is "peak":
             self.penalty_matrix = self.Peak_matrix(basis=self.basis, y_data=y_peak_or_valley)
-        elif penalty is "valley":
+        elif constraint is "valley":
             self.penalty_matrix = self.Valley_matrix(basis=self.basis, y_data=y_peak_or_valley)
         else:
-            print(f"Penalty {penalty} not implemented!")
+            print(f"Penalty {constraint} not implemented!")
 
     
 class TensorProductSmooths(TensorProductSpline):
     """Implementation of the 2d tensor product spline smooth in Additive Models."""
     
-    def __init__(self, x_data=None, n_param=(1,1), penalty="smooth", lam_c=None, lam_s=None):
+    def __init__(self, x_data=None, n_param=(1,1), constraint="smooth", lam_c=None, lam_s=None, type_="quantile"):
         """Create the tensor product spline basis as well as the smoothness penalty matrices.
         
         Parameters:
         -------------------
         x_data  : array of shape (len(x_data), 2)         - Values to build the B-spline basis for.
         n_param : tuple of integer                        - Number of B-Splines per dimension.
-        penalty : string                                  - Type of penalty, currently only "smooth"
+        constraint : string                               - Type of constraint, currently only "smooth"
         lam_c   : float                                   - Smoothing parameter value for the constraint. 
         lam_s   : float                                   - Smoothing parameter value for the smoothness
-                                                            penalty.
+                                                            penalty.    
         -------------------
         """
         
         self.x_data = x_data
         self.x1, self.x2 = x_data[:,0], x_data[:,1]
         self.n_param = n_param
-        self.penalty = penalty
-        self.lam_constraint = lam_c
-        self.lam_smooth = lam_s
+        self.constraint = constraint
+        self.lam = {"smoothness": lam_s, "constraint":lam_c}
+        self.knot_type = type_
         self.tps = TensorProductSpline()
-        self.tensor_product_spline_2d_basis(x_basis=self.x_data, k1=n_param[0], k2=n_param[1])
+        self.tensor_product_spline_2d_basis(x_basis=self.x_data, k1=n_param[0], k2=n_param[1], type_=type_)
         
         # Create the penalty matrix for the given penalty
-        if penalty is "smooth":
-            print(f"Penalty [{penalty}] Needs to be implemented!")
-            #self.penalty_matrix = self.Smoothness_matrix()
+
+        if constraint is "smooth":
+            print("--- NOT FINISHED ---")
+            print(f"Penalty [{constraint}] Needs to be implemented!")
+            self.penalty_matrix = np.zeros(self.Smoothness_matrix(n_param=n_param).shape)
         else:
-            print(f"Penalty {penalty} not implemented!")
+            print("--- NOT FINISHED ---")
+            print(f"Penalty {constraint} not implemented!")
         
 
 
