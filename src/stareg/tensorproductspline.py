@@ -19,11 +19,11 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from scipy.sparse import kron
 
-from .bspline import B_spline
+from .bspline import Bspline
 from .penalty_matrix import PenaltyMatrix
 
 
-class TensorProductSpline(B_spline, PenaltyMatrix):
+class TensorProductSpline(Bspline, PenaltyMatrix):
     """Implementation of the tensor product spline according to Simon Wood, 2006."""
     
     def __init__(self):
@@ -32,20 +32,20 @@ class TensorProductSpline(B_spline, PenaltyMatrix):
         self.x2 = None
         self.basis = None
         
-    def tensor_product_spline_2d_basis(self, x_basis=None, k1=5, k2=5, print_shapes=False, type_="quantile"):
+    def tensor_product_spline_2d_basis(self, x_data=None, k1=5, k2=5, print_shapes=False, type_="quantile"):
         """Calculate the TPS from two 1d B-splines.
         
         Parameters:
         -------------
         k1 : integer   - Number of knots for the first B-spline.
         k2 : integer   - Number of knots for the second B-Spline.
-        print_shape : bool - prints the dimensions of the basis matrices.
+        print_shape : bool  - prints the dimensions of the basis matrices.
+        type_ : int         - "quantile" or "equidistant", describes the knot placement
         
         """
         
-        #print("Use 'x_basis' for the spline basis!")
-        self.x1 = x_basis[:,0]
-        self.x2 = x_basis[:,1]
+        self.x1 = x_data[:,0]
+        self.x2 = x_data[:,1]
 
         self.x1 = np.unique(self.x1)
         self.x2 = np.unique(self.x2)
@@ -55,32 +55,26 @@ class TensorProductSpline(B_spline, PenaltyMatrix):
         
         self.k1 = k1
         self.k2 = k2
-        BSpline_x1 = B_spline(self.x1)
-        BSpline_x2 = B_spline(self.x2)
-        BSpline_x1.b_spline_basis(k=self.k1, type_=type_)
-        BSpline_x2.b_spline_basis(k=self.k2, type_=type_)
+        bspline_x1 = Bspline()
+        bspline_x2 = Bspline()
+        bspline_x1.bspline_basis(x_data=self.x1, k=self.k1, type_=type_)
+        bspline_x2.bspline_basis(x_data=self.x2, k=self.k2, type_=type_)       
         
-        #BSpline_x1.plot_basis("1st B-Spline basis")
-        #BSpline_x2.plot_basis("2nd B-Spline basis")
-        
-        
-        self.X1 = BSpline_x1.basis
-        self.X2 = BSpline_x2.basis
-        #self.basis = kron(self.X1, self.X2).toarray()
+        self.basis_x1 = bspline_x1.basis
+        self.basis_x2 = bspline_x2.basis
 
         # kronecker product for TPS according to
         # https://stats.stackexchange.com/questions/254542/surface-fit-using-tensor-product-of-b-splines 
-        X = np.zeros((self.x1.shape[0], self.X1.shape[1]*self.X2.shape[1]))
+        X = np.zeros((self.x1.shape[0], self.basis_x1.shape[1]*self.basis_x2.shape[1]))
         for i in range(X.shape[0]):
-            X[i,:] = np.kron(self.X1[i,:], self.X2[i,:])
+            X[i,:] = np.kron(self.basis_x1[i,:], self.basis_x2[i,:])
         self.basis = X
         
         
         if print_shapes:
-            print("Shape of the first basis: ", self.X1.shape)
-            print("Shape of the second basis: ", self.X2.shape)
+            print("Shape of the first basis: ", self.basis_x1.shape)
+            print("Shape of the second basis: ", self.basis_x2.shape)
             print("Shape of the tensor product basis: ", self.basis.shape)
-        return
         
     # not trusted
     def plot_basis(self):
@@ -91,8 +85,7 @@ class TensorProductSpline(B_spline, PenaltyMatrix):
         """
         fig = go.Figure()
         x1g, x2g = np.meshgrid(self.x1, self.x2)
-        #print("x1g: ", x1g.shape)
-        #print("x2g: ", x2g.shape)
+
         for i in range(self.basis.shape[1]):
             fig.add_trace(
                 go.Surface(
@@ -112,7 +105,6 @@ class TensorProductSpline(B_spline, PenaltyMatrix):
             title="Tensor product spline basis", 
         )
         fig.show()
-        return
 
     
     # not trusted
@@ -149,49 +141,44 @@ class TensorProductSpline(B_spline, PenaltyMatrix):
 
 
 # Test for tensorproductspline
-"""
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
-from sklearn.metrics import mean_squared_error
+def test_tensorproductspline():
+    import plotly.graph_objects as go
+    import plotly.express as px
+    from plotly.subplots import make_subplots
+    from sklearn.metrics import mean_squared_error
 
 
-# data generation on a grid
-samples = 250
-x = np.linspace(-3, 3, samples)
-xgrid = np.meshgrid(x,x)
-grid = np.array([xgrid[1].ravel(), xgrid[0].ravel()]).T
+    # data generation on a grid
+    samples = 250
+    x = np.linspace(-3, 3, samples)
+    xgrid = np.meshgrid(x,x)
+    grid = np.array([xgrid[1].ravel(), xgrid[0].ravel()]).T
 
-# define test functions
-def binorm(x,y):
-    return (15/(2*np.pi)) * np.exp(-0.5 * (x**2 + y**2)) + 0.1*np.random.randn(x.shape[0])
+    # define test functions
+    def binorm(x,y):
+        return (15/(2*np.pi)) * np.exp(-0.5 * (x**2 + y**2)) + 0.1*np.random.randn(x.shape[0])
 
-def xtimesy(x,y):
-    return x * y  + np.random.randn(1)
+    Y = binorm(grid[:,0], grid[:,1]).reshape((samples, samples))
 
-Y = binorm(grid[:,0], grid[:,1]).reshape((samples, samples))
-#Y = xtimesy(grid[:,0], grid[:,1]).reshape((samples, samples))
+    go.Figure(go.Surface(z=Y, name="Test function")).show()
 
-go.Figure(go.Surface(z=Y, name="Test function")).show()
+    T = TensorProductSpline(x1=np.unique(grid[:,0]), 
+                            x2=np.unique(grid[:,1]))
 
-T = TensorProductSpline(x1=np.unique(grid[:,0]), 
-                        x2=np.unique(grid[:,1]))
+    T.tensor_product_spline_2d_basis(k1=12, k2=12)
 
-T.tensor_product_spline_2d_basis(k1=12, k2=12)
+    # OLS
+    X = T.basis
+    beta = (np.linalg.pinv(X.T @ X) @ X.T @ Y)
+    # prediction
+    pred = X @ beta
 
-# OLS
-X = T.basis
-beta = (np.linalg.pinv(X.T @ X) @ X.T @ Y)
-# prediction
-pred = X @ beta
+    fig = make_subplots(rows=1, cols=2,
+                        specs=[[{"type": "scene"}, {"type": "scene"}]],)
+    fig.add_trace(go.Scatter3d(x=grid[:,0], y=grid[:,1], z=Y.ravel(), name="data", mode="markers"), row=1, col=1)
+    fig.add_trace(go.Scatter3d(x=grid[:,0], y=grid[:,1], z=pred.ravel(), name="pred"), row=1, col=1)
+    fig.show()
 
-fig = go.Figure()
-fig = make_subplots(rows=1, cols=2,
-                    specs=[[{"type": "scene"}, {"type": "scene"}]],)
-fig.add_trace(go.Scatter3d(x=grid[:,0], y=grid[:,1], z=Y.ravel(), name="data", mode="markers"), row=1, col=1)
-fig.add_trace(go.Scatter3d(x=grid[:,0], y=grid[:,1], z=pred.ravel(), name="pred"), row=1, col=1)
-fig.show()
+    mean_squared_error(pred.ravel(), Y.ravel())
 
-mean_squared_error(pred.ravel(), Y.ravel())
-"""
 

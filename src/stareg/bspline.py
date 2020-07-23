@@ -17,17 +17,16 @@ import plotly.graph_objects as go
 from .Code_snippets import addVertLinePlotly
 from .penalty_matrix import PenaltyMatrix
 
-class B_spline(PenaltyMatrix):
+class Bspline(PenaltyMatrix):
     
-    def __init__(self, x=None, order="cubic"):
+    def __init__(self, order="cubic"):
         self.order = order
-        self.x = x
         self.basis = None
         self.knots = None
-        if order is "cubic":
+        if order == "cubic":
             self.m = 2
 
-    def b_spline(self, k, i, m=2):
+    def bspline(self, k, i, m=2):
         """Compute the i-th b-spline basis function of order m at the values given in x.
         
         Parameter:
@@ -43,40 +42,30 @@ class B_spline(PenaltyMatrix):
             #print("m = ", m, "\t i = ", i)
             z0 = (self.x - k[i]) / (k[i+m+1] - k[i])
             z1 = (k[i+m+2] - self.x) / (k[i+m+2] - k[i+1])
-            return z0*self.b_spline(k, i, m-1) + z1*self.b_spline(k, i+1, m-1)
+            return z0*self.bspline(k, i, m-1) + z1*self.bspline(k, i+1, m-1)
                 
-    def b_spline_basis(self, x_basis=None, k=10, m=2, type_="quantile"):
+    def bspline_basis(self, x_data=None, k=10, m=2, type_="quantile"):
         """Set up model matrix for the B-spline basis.
         One needs k + m + 1 knots for a spline basis of order m with k parameters. 
-        If self.x is defined, x_basis is not used!
+        If self.x is defined, x_data is not used!
         
         Parameters:
         -------------
         k : integer   - number of parameters (== number of B-splines)
         m : interger  - specifies the order of the spline, m+1 = order
-        x_basis : None, ndarray - for the case that no x was defined
+        x_data : None, ndarray - for the case that no x was defined
                                   in the initialization of the BSpline
         type_ : string  - either "quantile" or "equidistant"
         
         """
-        # check_if_none(self.x, x_basis, self)
+
         if not hasattr(self, 'm'):
             self.m = m
-        if not hasattr(self, 'x'):
-            self.x = None
-        if self.x is None :
-            if type(x_basis) is None:
-                print("Type of x: ", type(x_basis))
-                print("Include data for 'x'!")
-                return    
-            elif type(x_basis) is np.ndarray:
-                print("Use 'x_basis' for the spline basis!")
-                self.x = x_basis
-            else:
-                print(f"Datatype for 'x':{type(x_basis)} not supported!")
-                return
+        if type(x_data) is np.ndarray:
+            self.x = x_data
         else:
-            print("'x' from initialization is used for the spline basis!")
+            print(f"Datatype for 'x':{type(x_data)} not supported!")
+            return
         self.x.sort()
         x = self.x
         assert (type(x) is np.ndarray), "Type of x is not ndarray!"
@@ -84,11 +73,9 @@ class B_spline(PenaltyMatrix):
         X = np.zeros((n, k))
         
         xmin, xmax = np.min(x), np.max(x)
-        if type_ is "quantile":
+        if type_ == "quantile":
             xk = np.quantile(a=x, q=np.linspace(0,1,k - m))
-            # change definition of dx to minimum knot difference for more robustness
-            # dx = xk[-1] - xk[-2]
-        elif type_ is "equidistant":
+        elif type_ == "equidistant":
             xk = np.linspace(x.min(), x.max(), k-m)
         else:
             print("Knot placement type is not supported!!!")
@@ -99,12 +86,11 @@ class B_spline(PenaltyMatrix):
         xk = np.append(xk, np.arange(xmax+dx, xmax+(m+2)*dx, dx))
         
         for i in range(k):
-            X[:,i] = self.b_spline(k=xk, i=i, m=m)
+            X[:,i] = self.bspline(k=xk, i=i, m=m)
             
         self.basis = X
         self.knots = xk
         self.n_param = int(X.shape[1])
-        return 
     
     def plot_basis(self, title=""):
         """Plot the B-spline basis matrix and the knot loactions.
@@ -112,7 +98,7 @@ class B_spline(PenaltyMatrix):
         """
         if self.basis is None or self.knots is None:
             k = 10
-            self.b_spline_basis(k=k, m=self.m)
+            self.bspline_basis(k=k, m=self.m)
 
         fig = go.Figure()
         for i in range(self.basis.shape[1]):
@@ -125,5 +111,4 @@ class B_spline(PenaltyMatrix):
         else:
             fig.update_layout(title="B-Spline basis")
         fig.show()
-        return
                     

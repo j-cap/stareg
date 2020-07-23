@@ -22,12 +22,12 @@ class PenaltyMatrix():
     """Implementation of the various penalty matrices for penalized B-Splines."""
     def __init__(self, n_param=10):
         self.n_param = n_param
-        self.D1 = None
-        self.D2 = None
-        self.Peak = None
-        self.Valley = None
+        self.d1 = None
+        self.d2 = None
+        self.peak = None
+        self.valley = None
         
-    def D1_difference_matrix(self, n_param=0):
+    def d1_difference_matrix(self, n_param=0):
         """Create the first order difference matrix.  
         
         Parameters:
@@ -37,7 +37,7 @@ class PenaltyMatrix():
         
         Returns:
         ------------
-        D1 : ndarray  - a matrix of size [k x k-1], 
+        d1 : ndarray  - a matrix of size [k x k-1], 
         """
         
         if n_param == 0:
@@ -47,13 +47,13 @@ class PenaltyMatrix():
         assert (type(k) is int), "Type of input k must be integer!"
         d = np.array([-1*np.ones(k), np.ones(k)])
         offset=[0,1]
-        D1 = diags(d,offset, dtype=np.int).toarray()
-        D1 = D1[:-1,:]
-        self.D1 = D1
+        d1 = diags(d,offset, dtype=np.int).toarray()
+        d1 = d1[:-1,:]
+        self.d1 = d1
         
-        return D1
+        return self.d1
 
-    def D2_difference_matrix(self, n_param=0):
+    def d2_difference_matrix(self, n_param=0):
         """Create the second order difference matrix. 
 
         Parameters:
@@ -63,7 +63,7 @@ class PenaltyMatrix():
         
         Returns:
         ------------
-        D2 : ndarray  - a matrix of size [k x k-2], 
+        d2 : ndarray  - a matrix of size [k x k-2], 
         """
         
         if n_param == 0:
@@ -73,13 +73,13 @@ class PenaltyMatrix():
         assert (type(k) is int), "Type of input k is not integer!"
         d = np.array([np.ones(k), -2*np.ones(k), np.ones(k)])
         offset=[0,1,2]
-        D2 = diags(d,offset, dtype=np.int).toarray()
-        D2 = D2[:-2,:]
-        self.D2 = D2
+        d2 = diags(d,offset, dtype=np.int).toarray()
+        d2 = d2[:-2,:]
+        self.d2 = d2
 
-        return D2
+        return self.d2
     
-    def Smoothness_matrix(self, n_param=0):
+    def smoothness_matrix(self, n_param=0):
         """Create the smoothness penalty matrix according to Hofner 2012.
         
         Parameters:
@@ -89,7 +89,7 @@ class PenaltyMatrix():
         
         Returns:
         -------------
-        S  : ndarray  -  Peak penalty matrix of size [k x k] of the form 
+        s  : ndarray  -  Peak penalty matrix of size [k x k] of the form 
                          |1 -2  1  0 0 . . . |
                          |0  1 -2  1 0 . . . |
                          |0  0  1 -2 1 . . . |
@@ -107,15 +107,15 @@ class PenaltyMatrix():
         assert (type(k) is int), "Type of input k is not integer!"
         s = np.array([np.ones(k), -2*np.ones(k), np.ones(k)])
         offset=[0,1,2]
-        S = diags(s,offset, dtype=np.int).toarray()
-        S = S[:-2,:]
+        smoothness = diags(s,offset, dtype=np.int).toarray()
+        smoothness = smoothness[:-2,:]
         
-        self.Smoothness = S
+        self.smoothness = smoothness
         
-        return S
+        return self.smoothness
             
     
-    def Peak_matrix(self, n_param=0, y_data=None, basis=None):
+    def peak_matrix(self, n_param=0, y_data=None, basis=None):
         """Create the peak penalty matrix. Mon. inc. till the peak, then mon. dec.
         
         Parameters:
@@ -128,7 +128,7 @@ class PenaltyMatrix():
         
         Returns:
         -------------
-        P  : ndarray  -  Peak penalty matrix of size [k x k]
+        peak  : ndarray  -  Peak penalty matrix of size [k x k]
         """
         
         assert (y_data is not None), "Include real y_data!!!"
@@ -148,15 +148,15 @@ class PenaltyMatrix():
         right_border_spline_idx = int(border[-1][1])
         
         # create inc, zero and dec penalty matrices for the corresponding ares
-        inc_matrix = self.D1_difference_matrix(n_param=left_border_spline_idx - 1)
+        inc_matrix = self.d1_difference_matrix(n_param=left_border_spline_idx - 1)
         plateu_matrix = np.zeros((len(border), len(border)), dtype=np.int)
-        dec_matrix = -1 * self.D1_difference_matrix(n_param= k - right_border_spline_idx)
+        dec_matrix = -1 * self.d1_difference_matrix(n_param= k - right_border_spline_idx)
 
-        self.Peak = block_diag(*[inc_matrix, plateu_matrix, dec_matrix])
+        self.peak = block_diag(*[inc_matrix, plateu_matrix, dec_matrix])
                 
-        return self.Peak
+        return self.peak
   
-    def Valley_matrix(self, n_param=0, y_data=None, basis=None):
+    def valley_matrix(self, n_param=0, y_data=None, basis=None):
         """Create the valley penalty matrix. Mon. dec. till the valley, then mon. inc.
         
         Parameters:
@@ -169,7 +169,7 @@ class PenaltyMatrix():
         
         Returns:
         -------------
-        P  : ndarray  -  valley penalty matrix of size [k x k]
+        valley  : ndarray  -  valley penalty matrix of size [k x k]
         """
         
         assert (y_data is not None), "Include real y_data!!!"
@@ -179,7 +179,7 @@ class PenaltyMatrix():
             k = self.n_param
         else:
             k = n_param
-            
+
         # find the valley index
         valley, properties = find_peaks(x=-y_data, distance=int(len(y_data)))
         
@@ -189,12 +189,12 @@ class PenaltyMatrix():
         right_border_spline_idx = int(border[-1][1])
         
         # create dec, zero and inc penalty matrices for the corresponding ares
-        inc_matrix = -1* self.D1_difference_matrix(n_param=left_border_spline_idx - 1)
+        inc_matrix = -1* self.d1_difference_matrix(n_param=left_border_spline_idx - 1)
         plateu_matrix = np.zeros((len(border), len(border)), dtype=np.int)
-        dec_matrix = self.D1_difference_matrix(n_param= k - right_border_spline_idx)
-        self.Valley = block_diag(*[inc_matrix, plateu_matrix, dec_matrix])
+        dec_matrix = self.d1_difference_matrix(n_param= k - right_border_spline_idx)
+        self.valley = block_diag(*[inc_matrix, plateu_matrix, dec_matrix])
         
-        return self.Valley
+        return self.valley
         
 
 

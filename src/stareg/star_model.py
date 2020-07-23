@@ -15,6 +15,7 @@ import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 import pprint
+import copy
 from numpy.linalg import lstsq
 from scipy.linalg import block_diag
 from scipy.signal import find_peaks
@@ -26,7 +27,6 @@ from sklearn.model_selection import ParameterGrid
 from .smooth import Smooths as s
 from .smooth import TensorProductSmooths as tps
 from .tensorproductspline import TensorProductSpline as t
-from .bspline import B_spline as b
 from .penalty_matrix import PenaltyMatrix
 
 class StarModel(BaseEstimator):
@@ -80,44 +80,37 @@ class StarModel(BaseEstimator):
         self.y = y
         
         for k,v in self.description_dict.items():
-            if k[0] is "s":
+            if k[0] == "s":
                 self.smooths.append(
                     s(
                         x_data=X[:,int(k[2])-1], 
                         n_param=v["n_param"], 
                         constraint=v["constraint"], 
                         y_peak_or_valley=y,
-                        lam_s=v["lam"]["smoothness"],
-                        lam_c=v["lam"]["constraint"],
+                        lambdas=v["lam"],
                         type_=v["knot_type"]
                     )
                 )
-            elif k[0] is "t":
+            elif k[0] == "t":
                 self.smooths.append(
                     tps(
                         x_data=X[:, [int(k[2])-1, int(k[4])-1]], 
                         n_param=list(v["n_param"]), 
                         constraint=v["constraint"],
-                        lam_s=v["lam"]["smoothness"],
-                        lam_c=v["lam"]["constraint"],
+                        lambdas=v["lam"],
                         type_=v["knot_type"]
                     )
                 )    
         
         self.basis = np.concatenate([smooth.basis for smooth in self.smooths], axis=1) 
                
-        self.smoothness_penalty_list = [np.sqrt(s.lam["smoothness"]) * s.Smoothness_matrix(n_param=s.n_param) for s in self.smooths]
+        self.smoothness_penalty_list = [np.sqrt(s.lam["smoothness"]) * s.smoothness_matrix(n_param=s.n_param) for s in self.smooths]
         self.smoothness_penalty_matrix = block_diag(*self.smoothness_penalty_list)
 
         n_coef_list = [0] + [np.product(smooth.n_param) for smooth in self.smooths]
         n_coef_cumsum = np.cumsum(n_coef_list)
-        self.coef_list = n_coef_cumsum
-        
-        #X_fit = np.copy(X)
-        #X_fit.sort(axis=0)
-        #self.X_fit = X_fit
-        
-        return 
+        self.coef_list = n_coef_cumsum            
+
     
     def create_basis_for_prediction(self, X=None):
         """Creates unpenalized BSpline basis for the data X.
@@ -131,9 +124,9 @@ class StarModel(BaseEstimator):
                 
         self.pred_smooths = list()
         for k,v in self.description_dict.items():
-            if k[0] is "s":
+            if k[0] == "s":
                 self.pred_smooths.append(s(x_data=X[:,int(k[2])-1], n_param=v["n_param"]))
-            elif k[0] is "t":
+            elif k[0] == "t":
                 self.pred_smooths.append(tps(x_data=X[:, [int(k[2])-1, int(k[4])-1]], n_param=list(v["n_param"])))    
         
         self.basis_for_prediction = np.concatenate([smooth.basis for smooth in self.pred_smooths], axis=1)
@@ -142,7 +135,6 @@ class StarModel(BaseEstimator):
         del self.X_pred
         self.X_pred = X
         
-        return
                                                                
     def create_penalty_block_matrix(self, beta_test=None):
         """Create the penalty block matrix specified in self.description_str.
@@ -185,11 +177,9 @@ class StarModel(BaseEstimator):
             penalty_matrix_list.append(np.sqrt(smooth.lam["constraint"]) * D.T @ V @ D )
             idx += n
             
-        #self.penalty_matrix_list_and_weight = np.concatenate(penalty_matrix_list, axis=1)
         self.penalty_matrix_list = penalty_matrix_list
         self.penalty_block_matrix = block_diag(*penalty_matrix_list)
 
-        return  
     
     def fit(self, X, y, plot_=True, max_iter=5):
         """Lstsq fit using Smooths.
@@ -218,42 +208,42 @@ class StarModel(BaseEstimator):
         fitting = lstsq(a=self.basis, b=y, rcond=None)
         beta_0 = fitting[0].ravel()
         self.coef_ = beta_0
-        self.calc_y_pred_and_mse(y=y)
+        # self.calc_mse(y=y)
         
         # check constraint violation
         v_old = check_constraint_full_model(self)
         
         # create dataframe to save the beta values 
-        colN = [ f"b_{i}" for i in range(len(beta_0))]        
-        df_beta = pd.DataFrame(columns=colN)
-        d = dict(zip(colN, beta_0))
+        col_name = [ f"b_{i}" for i in range(len(beta_0))]        
+        df_beta = pd.DataFrame(columns=col_name)
+        d = dict(zip(col_name, beta_0))
         df_beta = df_beta.append(pd.Series(d), ignore_index=True)
         
         beta = np.copy(beta_0)
         
         for i in range(max_iter):
-            print("Create basis with penalty and weight")
+            #print("Create basis with penalty and weight")
             self.create_penalty_block_matrix(beta_test=beta)
             
-            print("Least squares fit iteration ", i+1)
+            #print("Least squares fit iteration ", i+1)
             B = self.basis
-            D_c = self.penalty_block_matrix
-            D_s = self.smoothness_penalty_matrix
+            d_c = self.penalty_block_matrix
+            d_s = self.smoothness_penalty_matrix
         
-            BB = B.T @ B
-            By = B.T @ y
+            bb = B.T @ B
+            by = B.T @ y
 
             # user defined constraint
-            DVD = D_c.T             
+            dvd = d_c.T             
             # smoothing constraint
-            DD = D_s.T @ D_s
+            dd = d_s.T @ d_s
             
-            beta_new = (np.linalg.pinv(BB + DD + DVD) @ By).ravel()
+            beta_new = (np.linalg.pinv(bb + dd + dvd) @ by).ravel()
 
-            self.calc_y_pred_and_mse(y=y)
+            self.calc_mse(y=y)
             
             # create dict
-            d = dict(zip(colN, beta_new))
+            d = dict(zip(col_name, beta_new))
             df_beta = df_beta.append(pd.Series(d), ignore_index=True)
             
             
@@ -273,9 +263,8 @@ class StarModel(BaseEstimator):
         self.coef_ = self.df_beta.iloc[-1].values
         
         y_fit = self.basis @ self.coef_
-    
+     
         self.mse = mean_squared_error(y, y_fit)
-        print(f"Mean squared error on the data: {np.round(self.mse, 4)}")
         
         if plot_:
             dim = X.shape[1]
@@ -314,10 +303,7 @@ class StarModel(BaseEstimator):
         """
         
         check_is_fitted(self)
-        #if self.coef_ is None:
-        #    print("Model untrained!")
-        #    return
-        
+
         self.X_pred = np.copy(X)
         self.create_basis_for_prediction()
         pred = self.basis_for_prediction @ self.coef_
@@ -356,8 +342,38 @@ class StarModel(BaseEstimator):
         GCV = (1/n) * np.sum((y.ravel() - y_hat.ravel())**2 / (1 - trace/n))
         return GCV
 
-    
-    def calc_GCV(self, n_grid=5):
+    def generate_GCV_parameter_list(self, n_grid=5, p_min=1e-4):
+        """Generate the exhaustive parameter list for the GCV. 
+        
+        Parameters:
+        --------------
+        n_grid  : int               - spacing of the parameter range
+        p_min   : float             - minimum parameter
+
+        Returns:
+        --------------
+        grid    : ParameterGrid()   - returns an iterator
+
+        """
+
+        params = dict()
+        for k in list(self.description_dict):
+            for k2, v2 in self.description_dict[k]["lam"].items():
+                params[k+"_"+k2] = v2        
+
+        for k,v in params.items():
+            spacing = np.geomspace(p_min, p_min*10**n_grid, n_grid, endpoint=False)
+            lam_type = k[k.find("_")+1]
+            if lam_type == "s":
+                params[k] = spacing
+            elif lam_type == "c":
+                params[k] = spacing * 1e6
+
+        grid = ParameterGrid(params)
+
+        return grid
+
+    def calc_GCV(self, n_grid=5, plot_=False):
         """Carry out a cross validation for the model.
 
         Parameters:
@@ -365,22 +381,8 @@ class StarModel(BaseEstimator):
         n_grid  : int    - size of the gird per hyperparameter
 
         """
-
+        grid = self.generate_GCV_parameter_list(n_grid=n_grid)
         # generate dictionary of all hyperparameters (2 per smooth/tps)
-        params = dict()
-        for k in list(self.description_dict):
-            for k2, v2 in self.description_dict[k]["lam"].items():
-                params[k+"_"+k2] = v2        
-
-        for k,v in params.items():
-            spacing = np.geomspace(1e-4, 1000, 7, endpoint=False)
-            lam_type = k[k.find("_")+1]
-            if lam_type is "s":
-                params[k] = spacing
-            elif lam_type is "c":
-                params[k] = spacing * 1e6
-
-        grid = ParameterGrid(params)
         gcv_scores = []
         violated_constraints_list = []
 
@@ -389,25 +391,34 @@ class StarModel(BaseEstimator):
                 for k2, v2 in self.description_dict.items():
                     if k[:k.find("_")] == k2:
                         self.description_dict[k2]["lam"][k[k.find("_")+1:]] = v
-            
-            self.fit(X=self.X, y=self.y.ravel())
+            #print("\n Parameters: ", params)
+            self.fit(X=self.X, y=self.y.ravel(), plot_=plot_)
+            if plot_:
+                print(f"Parameters: {params}")
 
-            ccfm = check_constraint_full_model(M1)
-            gcv_new = M1.calc_GCV_score()
+            ccfm = check_constraint_full_model(self)
+            gcv_new = self.calc_GCV_score()
             
             # add a penalty for violating constraints
-            gcv_new += (np.sum(ccfm) / len(M1.coef_))
+            gcv_new += (np.sum(ccfm) / len(self.coef_))
             gcv_scores.append(gcv_new)
             violated_constraints_list.append(ccfm)
 
         
-        print(f"Best fit parameter according to adapted-GCV score: {list(grid)[np.argmin(gcv_scores)]}")
-        print(f"Violated Constraints: {violated_constraints_list[np.argmin(gcv_scores)]} from ")
-        return list(grid)[np.argmin(gcv_scores)]
+        gcv_best = list(grid)[np.argmin(gcv_scores)] 
+        print(f"Best fit parameter according to adapted-GCV score: {gcv_best}")
+        print(f"Violated Constraints: {np.sum(violated_constraints_list[np.argmin(gcv_scores)])} from {len(self.coef_)}")
+
+        print("\n--- BEST FIT ACCORDING TO GCV ---")
+        descr_dict = self.set_params_after_gcv(params=gcv_best)
+        self.description_dict = descr_dict
+        self.fit(X=self.X, y=self.y, plot_=True)
+
+        return gcv_best, descr_dict
             
 
-    def calc_y_pred_and_mse(self, y):
-        """Calculates y_pred and prints the MSE.
+    def calc_mse(self, y):
+        """Calculates and prints the MSE.
         
         Parameters:
         --------------
@@ -416,8 +427,8 @@ class StarModel(BaseEstimator):
         assert (self.coef_ is not None), "Model is untrained, run Model.fit(X, y) first!"
         y_fit = self.basis @ self.coef_
         mse = mean_squared_error(y, y_fit) 
-        print(f"Mean squared error on data for unconstrained LS fit: {np.round(mse, 4)}")
-        return y_fit, mse   
+        print(f"Mean squared error on data: {np.round(mse, 4)}")
+        return mse   
 
 
     def get_params(self, deep=True):
@@ -440,7 +451,23 @@ class StarModel(BaseEstimator):
             for key, value in param[1].items():
                 if hasattr(smooth, key):
                     setattr(smooth, str(key), value)
-        return 
+
+    def set_params_after_gcv(self, params):
+        """Sets the parameters after the GCV search. 
+        Only run inside of calc_GCV.
+
+        Parameters:
+        ------------
+        params  : dict      - best parameter combination found by GCV
+        """
+        descr_dict = copy.deepcopy(self.description_dict)
+        for k in params.keys():
+            idx = k.find("_")
+            s = k[:idx]
+            t = k[idx+1:]
+            descr_dict[s]["lam"][t] = params[k]
+        return descr_dict
+         
     
     def plot_xy(self, x, y, title="Titel", name="Data", xlabel="xlabel", ylabel="ylabel"):
         """Basic plotting function."""
@@ -453,8 +480,7 @@ class StarModel(BaseEstimator):
     
     def plot_basis(self, matrix):
         """Plot the matrix."""
-        fig = go.Figure(go.Image(z=matrix)).show()
-        return
+        go.Figure(go.Image(z=matrix)).show()
                         
     
 def check_constraint(beta, constraint, print_idx=False, y=None, basis=None):
@@ -473,24 +499,24 @@ def check_constraint(beta, constraint, print_idx=False, y=None, basis=None):
     V : ndarray       - Matrix with 1 where the constraint is violated, 0 else.
     
     """
-    V = np.zeros((len(beta), len(beta)))
+
     b_diff = np.diff(beta)
     b_diff_diff = np.diff(b_diff)
-    if constraint is "inc":
+    if constraint == "inc":
         v = [0 if i > 0 else 1 for i in b_diff] #+ [0]
-    elif constraint is "dec":
+    elif constraint == "dec":
         v = [0 if i < 0 else 1 for i in b_diff] #+ [0]
-    elif constraint is "conv":
+    elif constraint == "conv":
         v = [0 if i > 0 else 1 for i in b_diff_diff] #+ [0,0]
-    elif constraint is "conc":
+    elif constraint == "conc":
         v = [0 if i < 0 else 1 for i in b_diff_diff] #+ [0,0]
-    elif constraint is "no":
+    elif constraint == "no":
         v = list(np.zeros(len(beta), dtype=np.int))
-    elif constraint is "smooth":
+    elif constraint == "smooth":
         v = list(np.ones(len(b_diff_diff), dtype=np.int)) #+ [0,0]
-    elif constraint is "tps":
+    elif constraint == "tps":
         v = list(np.ones(len(beta), dtype=np.int))
-    elif constraint is "peak":
+    elif constraint == "peak":
         assert (y is not None), "Include y in check_constraints for penalty=[peak]"
         assert (basis is not None), "Include basis in check_constraints for penalty=[peak]"
 
@@ -506,7 +532,7 @@ def check_constraint(beta, constraint, print_idx=False, y=None, basis=None):
         # delete the last two entries
         v = v[:-2]
         
-    elif constraint is "valley":
+    elif constraint == "valley":
         assert (y is not None), "Include y in check_constraints for penalty=[valley]"
         assert (basis is not None), "Include basis in check_constraints for penalty=[peak]"
 
@@ -560,7 +586,6 @@ def bar_chart_of_coefficient_difference_dataframe(df):
     """Takes the dataframe Model.df_beta and plots a bar chart of the rows. """
 
     fig = go.Figure()
-    x = np.arange(df.shape[1]-1)
     xx = df.columns[1:]
     
     for i in range(df.shape[0]):

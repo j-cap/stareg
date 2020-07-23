@@ -16,7 +16,7 @@ setup(
         "smooth",
         "star_model",
         "tensorproductspline",
-        "Code_snippets",
+        "Code_snippets", 
         "TestFunctions"
         ], # list of actual python code modules -> this is what is imported
     package_dir={"": "src"}, # code is in the src directory
