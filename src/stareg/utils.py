@@ -33,54 +33,72 @@ def check_constraint(beta, constraint, print_idx=False, y=None, basis=None):
         v = [0 if i > 0 else 1 for i in b_diff_diff] #+ [0,0]
     elif constraint == "conc":
         v = [0 if i < 0 else 1 for i in b_diff_diff] #+ [0,0]
-    elif constraint == "no":
-        v = list(np.zeros(len(beta), dtype=np.int))
     elif constraint == "smooth":
         v = list(np.ones(len(b_diff_diff), dtype=np.int)) #+ [0,0]
     elif constraint == "tps":
         v = list(np.ones(len(beta), dtype=np.int))
     elif constraint == "peak":
-        assert (y is not None), "Include y in check_constraints for penalty=[peak]"
-        assert (basis is not None), "Include basis in check_constraints for penalty=[peak]"
-
-        peak, properties = find_peaks(x=y, distance=int(len(y)))
-        border = np.argwhere(basis[peak,:] > 0)
-        left_border_spline_idx = int(border[0][1])
-        right_border_spline_idx = int(border[-1][1])
-        v_inc = [0 if i > 0 else 1 for i in b_diff[:left_border_spline_idx]]
-        v_dec = [0 if i < 0 else 1 for i in b_diff[right_border_spline_idx:]]
-        v_plateau = np.zeros(right_border_spline_idx - left_border_spline_idx + 1)
-        v = np.concatenate([v_inc, v_plateau, v_dec]) 
-        
-        # delete the last two entries
-        v = v[:-2]
-        
+        v = check_peak_constraint(basis=basis, y=y, b_diff=b_diff)
     elif constraint == "valley":
-        assert (y is not None), "Include y in check_constraints for penalty=[valley]"
-        assert (basis is not None), "Include basis in check_constraints for penalty=[peak]"
-
-        peak, properties = find_peaks(x= -1*y, distance=int(len(y)))
-        border = np.argwhere(basis[peak,:] > 0)
-        left_border_spline_idx = int(border[0][1])
-        right_border_spline_idx = int(border[-1][1])
-        v_dec = [0 if i < 0 else 1 for i in b_diff[:left_border_spline_idx:]]
-        v_inc = [0 if i > 0 else 1 for i in b_diff[right_border_spline_idx:]]
-        v_plateau = np.zeros(right_border_spline_idx - left_border_spline_idx + 1)
-        v = np.concatenate([v_dec, v_plateau, v_inc])
-        
-        # delete the last two entries
-        v = v[:-2]
-    
+        v = check_valley_constraint(basis=basis, y=y, b_diff=b_diff)
     else:
-        print(f"Constraint [{constraint}] not implemented!")
-        return    
-    
-    V = np.diag(v)
-    
-    if print_idx:
-        print("Constraint violated at the following indices: ")
-        print([idx for idx, n in enumerate(v) if n == 1])
-    return V
+        print(f"Constraint [{constraint}] not implemented -> zero matrix returned !")
+        v = list(np.zeros(len(beta), dtype=np.int))   
+    return np.diag(v)
+
+def check_valley_constraint(basis, y, b_diff):
+    """Calculate the weight vector v for violated constraint.
+
+    Parameters:
+    ------------
+    basis  : nd.array           - Bspline basis
+    y      : array              - target data
+    b_diff : array              - vector of coefficient differences
+
+    Returns:
+    ------------
+    v      : array              - vector of with 1 where constraint is violated,
+                                  0 elsewhere
+
+    """
+    peak, properties = find_peaks(x= -1*y, distance=int(len(y)))
+    border = np.argwhere(basis[peak,:] > 0)
+    left_border_spline_idx = int(border[0][1])
+    right_border_spline_idx = int(border[-1][1])
+    v_dec = [0 if i < 0 else 1 for i in b_diff[:left_border_spline_idx]]
+    v_inc = [0 if i > 0 else 1 for i in b_diff[right_border_spline_idx:]]
+    v_plateau = np.zeros(right_border_spline_idx - left_border_spline_idx + 1)
+    v = np.concatenate([v_dec, v_plateau, v_inc])
+    v = v[:-2]
+    return v
+
+
+def check_peak_constraint(basis, y, b_diff):
+    """Calculate the weight vector v for violated constraint.
+
+    Parameters:
+    ------------
+    basis  : nd.array           - Bspline basis
+    y      : array              - target data
+    b_diff : array              - vector of coefficient differences
+
+    Returns:
+    ------------
+    v      : array              - vector of with 1 where constraint is violated,
+                                  0 elsewhere
+
+    """
+    peak, properties = find_peaks(x=y, distance=int(len(y)))
+    border = np.argwhere(basis[peak,:] > 0)
+    left_border_spline_idx = int(border[0][1])
+    right_border_spline_idx = int(border[-1][1])
+    v_dec = [0 if i < 0 else 1 for i in b_diff[:left_border_spline_idx]]
+    v_inc = [0 if i > 0 else 1 for i in b_diff[:left_border_spline_idx]]
+
+    v_plateau = np.zeros(right_border_spline_idx - left_border_spline_idx + 1)
+    v = np.concatenate([v_dec, v_plateau, v_inc])
+    v = v[:-2]
+    return v
 
 def check_constraint_full_model(model, y):
     """Checks if the coefficients in the model violate the given constraints.
