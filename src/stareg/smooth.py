@@ -45,7 +45,6 @@ class Smooths(Bspline):
         else:
             self.lam = lambdas
         self.knot_type = type_
-        # self.bspline = Bspline()
         self.bspline_basis(x_data=self.x_data, k=self.n_param, type_=type_)
         
         # Sanity check for peak/valley penalty
@@ -98,7 +97,6 @@ class TensorProductSmooths(TensorProductSpline):
         else:
             self.lam = lambdas
         self.knot_type = type_
-        # self.tps = TensorProductSpline()
         self.tensor_product_spline_2d_basis(x_data=self.x_data, k1=n_param[0], k2=n_param[1], type_=type_)
         
         # Create the penalty matrix for the given penalty

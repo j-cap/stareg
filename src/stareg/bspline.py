@@ -14,7 +14,7 @@
 import numpy as np
 import plotly.graph_objects as go
 
-from .Code_snippets import addVertLinePlotly
+from .utils import add_vert_line
 from .penalty_matrix import PenaltyMatrix
 
 class Bspline(PenaltyMatrix):
@@ -105,7 +105,7 @@ class Bspline(PenaltyMatrix):
             fig.add_trace(go.Scatter(x=self.x, y=self.basis[:,i], 
                                      name=f"BSpline {i+1}", mode="lines"))
         for i in self.knots:
-            addVertLinePlotly(fig, x0=i)
+            add_vert_line(fig, x0=i)
         if title:
             fig.update_layout(title=title)
         else:
