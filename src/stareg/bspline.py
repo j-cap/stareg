@@ -28,12 +28,13 @@ class Bspline(PenaltyMatrix):
 
     def bspline(self, k, i, m=2):
         """Compute the i-th b-spline basis function of order m at the values given in x.
+        Not intended to be run as standalone function.
         
         Parameter:
         ---------------------
-        k   : array,     of knot locations
-        i   : int,       index of the b-spline basis function to compute
-        m   : int,       order of the spline, default is 2 (cubic)
+        k   : array   - of knot locations
+        i   : int     - index of the b-spline basis function to compute
+        m   : int     - order of the spline, default is 2 (cubic)
         """
         if m==-1:
             # return 1 if x is in {k[i], k[i+1]}, otherwise 0
@@ -82,19 +83,24 @@ class Bspline(PenaltyMatrix):
             print("Either 'quantile' or 'equidistant'!")
 
         dx = np.min(np.diff(xk))
-        xk = np.insert(xk, 0, np.arange(xmin-(m+1)*dx, xmin, dx))    
-        xk = np.append(xk, np.arange(xmax+dx, xmax+(m+2)*dx, dx))
+        xk = np.insert(xk, 0, np.linspace(xmin-(m+1)*dx, xmin, 3, endpoint=False))
+        xk = np.append(xk, np.linspace(xmax+dx, xmax+(m+1)*dx, 3, endpoint=False))
         
         for i in range(k):
             X[:,i] = self.bspline(k=xk, i=i, m=m)
             
         self.basis = X
         self.knots = xk
+        self.knot_type = type_
         self.n_param = int(X.shape[1])
     
+
     def plot_basis(self, title=""):
         """Plot the B-spline basis matrix and the knot loactions.
         They are indicated by a vertical line.
+
+        TODO:
+        - [ ] rework this function
         """
         if self.basis is None or self.knots is None:
             k = 10
@@ -110,5 +116,5 @@ class Bspline(PenaltyMatrix):
             fig.update_layout(title=title)
         else:
             fig.update_layout(title="B-Spline basis")
-        fig.show()
+        return fig
                     

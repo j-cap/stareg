@@ -66,10 +66,10 @@ def check_valley_constraint(basis, y, b_diff):
     left_border_spline_idx = int(border[0][1])
     right_border_spline_idx = int(border[-1][1])
     v_dec = [0 if i < 0 else 1 for i in b_diff[:left_border_spline_idx]]
-    v_inc = [0 if i > 0 else 1 for i in b_diff[right_border_spline_idx:]]
-    v_plateau = np.zeros(right_border_spline_idx - left_border_spline_idx + 1)
+    v_inc = [0 if i > 0 else 1 for i in b_diff[right_border_spline_idx+1:]]
+    v_plateau = np.zeros(len(border))
     v = np.concatenate([v_dec, v_plateau, v_inc])
-    v = v[:-2]
+    
     return v
 
 
@@ -93,11 +93,10 @@ def check_peak_constraint(basis, y, b_diff):
     left_border_spline_idx = int(border[0][1])
     right_border_spline_idx = int(border[-1][1])
     v_dec = [0 if i < 0 else 1 for i in b_diff[:left_border_spline_idx]]
-    v_inc = [0 if i > 0 else 1 for i in b_diff[:left_border_spline_idx]]
-
-    v_plateau = np.zeros(right_border_spline_idx - left_border_spline_idx + 1)
+    v_inc = [0 if i > 0 else 1 for i in b_diff[right_border_spline_idx+1:]]
+    v_plateau = np.zeros(len(border))
     v = np.concatenate([v_dec, v_plateau, v_inc])
-    v = v[:-2]
+    
     return v
 
 def check_constraint_full_model(model, y):

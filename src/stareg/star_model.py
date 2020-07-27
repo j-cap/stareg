@@ -58,8 +58,6 @@ class StarModel(BaseEstimator):
             for t, p, n, l, k  in self.description_str}
         self.smooths = None
         self.coef_ = None
-        self.smooths = list()
-        self.pred_smooths = list()
         
     def __str__(self):
         pp = pprint.PrettyPrinter()
@@ -79,6 +77,7 @@ class StarModel(BaseEstimator):
             [x] include TPS
         
         """
+
         self.smooths = list()
         # generate the smooths according to description_dict       
         for k,v in self.description_dict.items():
@@ -106,7 +105,7 @@ class StarModel(BaseEstimator):
         
         self.basis = np.concatenate([smooth.basis for smooth in self.smooths], axis=1) 
         # generate the smootness penalty block matrix
-        self.smoothness_penalty_list = [np.sqrt(s.lam["smoothness"]) * s.smoothness_matrix(n_param=s.n_param) for s in self.smooths]
+        self.smoothness_penalty_list = [s.lam["smoothness"] * s.smoothness_matrix().T @ s.smoothness_matrix() for s in self.smooths]
         self.smoothness_penalty_matrix = block_diag(*self.smoothness_penalty_list)
 
         n_coef_list = [0] + [np.product(smooth.n_param) for smooth in self.smooths]
@@ -115,13 +114,15 @@ class StarModel(BaseEstimator):
     def create_constraint_penalty_matrix(self, beta_test=None, y=None):
         """Create the penalty block matrix specified in self.description_str.
         
-        Looks like: ------------
-                    |p1 0  0  0|  
-                    |0 p2  0  0|
-                    |0  0 p3  0|
-                    |0  0  0 p4|
-                    ------------
-        where p_i is a a matrix according to the specified penalty.
+        Looks like: ----------------------------------- 
+                    |lam1*p1 0        0        0      |  
+                    |0       lam2*p2  0        0      | = P 
+                    |0       0        lam3*p3  0      |
+                    |0       0        0        lam4*p4|
+                    -----------------------------------
+        where P is a a matrix according to the specified penalty. 
+        
+        The matrix P.T @ P is then used!!!
 
         Parameters:
         ---------------
@@ -146,7 +147,7 @@ class StarModel(BaseEstimator):
             b = beta_test[self.coef_list[idx]:self.coef_list[idx+1]]
             D = smooth.penalty_matrix
             V = check_constraint(beta=b, constraint=smooth.constraint, y=y, basis=smooth.basis)
-            self.constraint_penalty_list.append(np.sqrt(smooth.lam["constraint"]) * D.T @ V @ D )
+            self.constraint_penalty_list.append(smooth.lam["constraint"] * D.T @ V @ D )
             
         self.constraint_penalty_matrix = block_diag(*self.constraint_penalty_list)
 
@@ -156,9 +157,10 @@ class StarModel(BaseEstimator):
         Parameters:
         X : np.ndarray - prediction data
         """
-        
-        assert(X is not None), "Need X-data for prediction!s"
-                
+        self.pred_smooths = list()
+        if len(X.shape) == 1:
+            X = X.reshape(len(X), -1)
+
         for k,v in self.description_dict.items():
             if k[0] == "s":
                 self.pred_smooths.append(
@@ -185,8 +187,7 @@ class StarModel(BaseEstimator):
         self.create_basis(X=X, y=y.ravel())    
         fitting = lstsq(a=self.basis, b=y, rcond=None)
         beta_0 = fitting[0].ravel()
-        self.coef_ = beta_0
-        self.LS_coef_ = beta_0        
+        self.coef_, self.LS_coef_ = beta_0, beta_0        
         return self
 
     def create_df_for_beta(self, beta_init=None):
@@ -201,7 +202,7 @@ class StarModel(BaseEstimator):
         df         : pd.DataFrame   - one colume for each coefficient.
 
         """
-        assert (len(beta_init) == self.basis.shape[1]), "beta_init has wrong shape!"
+
         col_name = [ f"b_{i}" for i in range(len(beta_init))]        
         df = pd.DataFrame(columns=col_name)
         d = dict(zip(col_name, beta_init))
@@ -231,39 +232,24 @@ class StarModel(BaseEstimator):
         
         for _ in range(max_iter):
             self.create_constraint_penalty_matrix(beta_test=self.coef_, y=y)
-            B = self.basis
-            D_c = self.constraint_penalty_matrix
-            D_s = self.smoothness_penalty_matrix
-        
-            BB = B.T @ B
-            By = B.T @ y
-
-            # user defined constraint and smoothing penalty
-            DVD, DD = D_c.T @ D_c, D_s.T @ D_s
-            
+            DVD = self.constraint_penalty_matrix
+            DD = self.smoothness_penalty_matrix
+            BB, By = self.basis.T @ self.basis, self.basis.T @ y
             v_old = check_constraint_full_model(model=self, y=y)
             beta_new = (np.linalg.pinv(BB + DD + DVD) @ By).ravel()
             v_new = check_constraint_full_model(model=self, y=y)
             self.coef_ = beta_new                       
-
             df = df.append(pd.DataFrame(data=beta_new.reshape(1,-1), columns=df.columns))
-            
-            # check constraint violation
             delta_v = np.sum(v_new - v_old)
             if delta_v == 0: 
                 break
 
         print("Iteration converged!")
-        self.df = df
-        
-        y_pred = self.basis @ self.coef_
-     
-        self.mse = mean_squared_error(y, y_pred)
-        
-        if plot_: self.plot_fit(X=X, y=y).show()
-        
         print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self, y=y))} from {len(self.coef_)} ")
-            
+        self.df = df
+        self.mse = mean_squared_error(y, self.basis @ self.coef_)       
+        if plot_: self.plot_fit(X=X, y=y).show()
+
         return self
     
     def plot_fit(self, X, y):
@@ -330,12 +316,9 @@ class StarModel(BaseEstimator):
         
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
 
-        self.X_pred = np.copy(X)
-        self.create_basis_for_prediction()
-        pred = self.basis_for_prediction @ self.coef_
+        self.create_basis_for_prediction(X=X)
+        return self.basis_for_prediction @ self.coef_
         
-        return pred
-    
     def calc_hat_matrix(self):
         """Calculates the hat or smoother matrix according to
             S = Z (Z'Z + S'S + P'P) Z'

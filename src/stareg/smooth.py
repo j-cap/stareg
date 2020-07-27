@@ -43,13 +43,10 @@ class Smooths(Bspline):
         if lambdas is None:
             self.lam = {"smoothnes":1, "constraint": 1000}
         else:
+            assert (type(lambdas) == dict), "Need to be of the form {'smoothness':1, 'constraint':1}"
             self.lam = lambdas
         self.knot_type = type_
         self.bspline_basis(x_data=self.x_data, k=self.n_param, type_=type_)
-        
-        # Sanity check for peak/valley penalty
-        if constraint == "peak" or constraint == "valley":
-            assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
         
         # Create the penalty matrix for the given penalty
         if constraint == "inc":
@@ -63,8 +60,10 @@ class Smooths(Bspline):
         elif constraint == "smooth":
             self.penalty_matrix = self.smoothness_matrix()
         elif constraint == "peak":
+            assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
             self.penalty_matrix = self.peak_matrix(basis=self.basis, y_data=y_peak_or_valley)
         elif constraint == "valley":
+            assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
             self.penalty_matrix = self.valley_matrix(basis=self.basis, y_data=y_peak_or_valley)
         else:
             print(f"Penalty {constraint} not implemented!")
@@ -86,14 +85,18 @@ class TensorProductSmooths(TensorProductSpline):
                                                             {"smoothness": 1, "constraint": 1000}
         type_   : str                                     - "quantile" or "equidistant", describes the knot placement
         -------------------
+        
+        TODO:
+        - [ ] constraints need to be implemented 
         """
+
         
         self.x_data = x_data
         self.x1, self.x2 = x_data[:,0], x_data[:,1]
         self.n_param = n_param
         self.constraint = constraint
         if lambdas is None:
-            self.lam = {"smoothnes":1, "constraint": 1000}
+            self.lam = {"smoothnes":0, "constraint": 0}
         else:
             self.lam = lambdas
         self.knot_type = type_
@@ -103,7 +106,6 @@ class TensorProductSmooths(TensorProductSpline):
 
         if constraint == "smooth":
             print("--- NOT FINISHED ---")
-            print(f"Penalty [{constraint}] Needs to be implemented!")
             self.penalty_matrix = np.zeros(self.smoothness_matrix(n_param=n_param).shape)
         else:
             print("--- NOT FINISHED ---")

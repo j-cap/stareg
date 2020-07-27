@@ -101,7 +101,7 @@ class PenaltyMatrix():
         else:
             if type(n_param) is int:
                 k = n_param
-            elif type(n_param) is list:
+            elif type(n_param) is tuple:
                 k = int(np.product(n_param))
             
         assert (type(k) is int), "Type of input k is not integer!"
@@ -128,7 +128,10 @@ class PenaltyMatrix():
         
         Returns:
         -------------
-        peak  : ndarray  -  Peak penalty matrix of size [k x k]
+        peak  : ndarray  -  Peak penalty matrix of size [k-1 x k]
+
+        TODO:
+        - [ ] boundary cases if peak is far left or far right
         """
         
         assert (y_data is not None), "Include real y_data!!!"
@@ -148,12 +151,13 @@ class PenaltyMatrix():
         right_border_spline_idx = int(border[-1][1])
         
         # create inc, zero and dec penalty matrices for the corresponding ares
-        inc_matrix = self.d1_difference_matrix(n_param=left_border_spline_idx - 1)
+        inc_matrix = self.d1_difference_matrix(n_param=left_border_spline_idx)
         plateu_matrix = np.zeros((len(border), len(border)), dtype=np.int)
         dec_matrix = -1 * self.d1_difference_matrix(n_param= k - right_border_spline_idx)
 
-        self.peak = block_diag(*[inc_matrix, plateu_matrix, dec_matrix])
-                
+        self.peak = block_diag(*[inc_matrix[:,:-1], plateu_matrix, dec_matrix])
+        self.peak[left_border_spline_idx-2, left_border_spline_idx-1] = 1
+
         return self.peak
   
     def valley_matrix(self, n_param=0, y_data=None, basis=None):
@@ -169,7 +173,10 @@ class PenaltyMatrix():
         
         Returns:
         -------------
-        valley  : ndarray  -  valley penalty matrix of size [k x k]
+        valley  : ndarray  -  valley penalty matrix of size [k-1 x k]
+
+        TODO:
+        - [ ] boundary cases if valley is far left or far right
         """
         
         assert (y_data is not None), "Include real y_data!!!"
@@ -189,11 +196,12 @@ class PenaltyMatrix():
         right_border_spline_idx = int(border[-1][1])
         
         # create dec, zero and inc penalty matrices for the corresponding ares
-        inc_matrix = -1* self.d1_difference_matrix(n_param=left_border_spline_idx - 1)
+        inc_matrix = -1* self.d1_difference_matrix(n_param=left_border_spline_idx)
         plateu_matrix = np.zeros((len(border), len(border)), dtype=np.int)
         dec_matrix = self.d1_difference_matrix(n_param= k - right_border_spline_idx)
-        self.valley = block_diag(*[inc_matrix, plateu_matrix, dec_matrix])
-        
+        self.valley = block_diag(*[inc_matrix[:,:-1], plateu_matrix, dec_matrix])
+        self.valley[left_border_spline_idx-2, left_border_spline_idx-1] = -1
+
         return self.valley
         
 
