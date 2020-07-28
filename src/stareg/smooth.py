@@ -41,7 +41,7 @@ class Smooths(Bspline):
         self.n_param = n_param
         self.constraint = constraint
         if lambdas is None:
-            self.lam = {"smoothnes":1, "constraint": 1000}
+            self.lam = {"smoothness":1, "constraint": 1000}
         else:
             assert (type(lambdas) == dict), "Need to be of the form {'smoothness':1, 'constraint':1}"
             self.lam = lambdas
@@ -50,21 +50,25 @@ class Smooths(Bspline):
         
         # Create the penalty matrix for the given penalty
         if constraint == "inc":
-            self.penalty_matrix = self.d1_difference_matrix()
+            self.penalty_matrix = self.d1_difference_matrix(n_param=self.n_param)
         elif constraint == "dec":
-            self.penalty_matrix = -1 * self.d1_difference_matrix() 
+            self.penalty_matrix = -1 * self.d1_difference_matrix(n_param=self.n_param) 
         elif constraint == "conv":
-            self.penalty_matrix = self.d2_difference_matrix()
+            self.penalty_matrix = self.d2_difference_matrix(n_param=self.n_param)
         elif constraint == "conc":
-            self.penalty_matrix = -1 * self.d2_difference_matrix()
+            self.penalty_matrix = -1 * self.d2_difference_matrix(n_param=self.n_param)
         elif constraint == "smooth":
-            self.penalty_matrix = self.smoothness_matrix()
+            self.penalty_matrix = self.smoothness_matrix(n_param=self.n_param)
         elif constraint == "peak":
             assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
-            self.penalty_matrix = self.peak_matrix(basis=self.basis, y_data=y_peak_or_valley)
+            self.penalty_matrix = self.peak_matrix(
+                n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
+            )
         elif constraint == "valley":
             assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
-            self.penalty_matrix = self.valley_matrix(basis=self.basis, y_data=y_peak_or_valley)
+            self.penalty_matrix = self.valley_matrix(
+                n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
+            )
         else:
             print(f"Penalty {constraint} not implemented!")
 
@@ -96,7 +100,7 @@ class TensorProductSmooths(TensorProductSpline):
         self.n_param = n_param
         self.constraint = constraint
         if lambdas is None:
-            self.lam = {"smoothnes":0, "constraint": 0}
+            self.lam = {"smoothness":0, "constraint": 0}
         else:
             self.lam = lambdas
         self.knot_type = type_
@@ -106,7 +110,7 @@ class TensorProductSmooths(TensorProductSpline):
 
         if constraint == "smooth":
             print("--- NOT FINISHED ---")
-            self.penalty_matrix = np.zeros(self.smoothness_matrix(n_param=n_param).shape)
+            self.penalty_matrix = np.zeros((np.prod(n_param)-2, np.prod(n_param)))
         else:
             print("--- NOT FINISHED ---")
             print(f"Penalty {constraint} not implemented!")

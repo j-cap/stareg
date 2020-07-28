@@ -6,16 +6,13 @@ import plotly.graph_objs as go
 from scipy.signal import find_peaks
 
 
-def check_constraint(beta, constraint, print_idx=False, y=None, basis=None):
+def check_constraint(beta, constraint):
     """Checks if beta fits the constraint.
     
     Parameters:
     ---------------
     beta  : array     - Array of coefficients to be tested against the constraint.
     constraint : str  - Name of the constraint.
-    print_idx : bool  - .
-    y  : array        - Array of data for constraint "peak" and "valley".
-    basis : ndarray   - Matrix of the basis for constraint "peak" and "valley".
     
     Returns:
     ---------------
@@ -35,69 +32,48 @@ def check_constraint(beta, constraint, print_idx=False, y=None, basis=None):
         v = [0 if i < 0 else 1 for i in b_diff_diff] #+ [0,0]
     elif constraint == "smooth":
         v = list(np.ones(len(b_diff_diff), dtype=np.int)) #+ [0,0]
-    elif constraint == "tps":
-        v = list(np.ones(len(beta), dtype=np.int))
     elif constraint == "peak":
-        v = check_peak_constraint(basis=basis, y=y, b_diff=b_diff)
+        v = check_peak_constraint(beta=beta)
     elif constraint == "valley":
-        v = check_valley_constraint(basis=basis, y=y, b_diff=b_diff)
-    else:
-        print(f"Constraint [{constraint}] not implemented -> zero matrix returned !")
-        v = list(np.zeros(len(beta), dtype=np.int))   
+        v = check_valley_constraint(beta=beta)
     return np.diag(v)
 
-def check_valley_constraint(basis, y, b_diff):
+def check_valley_constraint(beta):
     """Calculate the weight vector v for violated constraint.
 
     Parameters:
     ------------
-    basis  : nd.array           - Bspline basis
-    y      : array              - target data
-    b_diff : array              - vector of coefficient differences
+    beta   : array              - array of coefficients to test for valley
 
     Returns:
     ------------
     v      : array              - vector of with 1 where constraint is violated,
                                   0 elsewhere
-
     """
-    peak, properties = find_peaks(x= -1*y, distance=int(len(y)))
-    border = np.argwhere(basis[peak,:] > 0)
-    left_border_spline_idx = int(border[0][1])
-    right_border_spline_idx = int(border[-1][1])
-    v_dec = [0 if i < 0 else 1 for i in b_diff[:left_border_spline_idx]]
-    v_inc = [0 if i > 0 else 1 for i in b_diff[right_border_spline_idx+1:]]
-    v_plateau = np.zeros(len(border))
-    v = np.concatenate([v_dec, v_plateau, v_inc])
-    
-    return v
+    idx = find_peaks(-beta, distance=len(beta))[0][0]
+    left = list(np.diff(beta[:idx]) > 0)
+    right = list(np.diff(beta[idx:]) < 0)
+    v = np.array(left+right+[False])
+    return v.astype(np.int)
 
 
-def check_peak_constraint(basis, y, b_diff):
+def check_peak_constraint(beta):
     """Calculate the weight vector v for violated constraint.
 
     Parameters:
     ------------
-    basis  : nd.array           - Bspline basis
-    y      : array              - target data
-    b_diff : array              - vector of coefficient differences
+    beta   : array              - array of coefficients to test for peak
 
     Returns:
     ------------
     v      : array              - vector of with 1 where constraint is violated,
                                   0 elsewhere
-
     """
-    peak, properties = find_peaks(x=y, distance=int(len(y)))
-    border = np.argwhere(basis[peak,:] > 0)
-    left_border_spline_idx = int(border[0][1])
-    right_border_spline_idx = int(border[-1][1])
-    v_dec = [0 if i < 0 else 1 for i in b_diff[:left_border_spline_idx]]
-    v_inc = [0 if i > 0 else 1 for i in b_diff[right_border_spline_idx+1:]]
-    v_plateau = np.zeros(len(border))
-    v = np.concatenate([v_dec, v_plateau, v_inc])
-    
-    return v
+    idx = find_peaks(beta, distance=len(beta))[0][0]
+    left = list(np.diff(beta[:idx]) < 0)
+    right = list(np.diff(beta[idx:]) > 0)
+    v = np.array(left+right+[False])
+    return v.astype(np.int)
 
 def check_constraint_full_model(model, y):
     """Checks if the coefficients in the model violate the given constraints.
@@ -118,7 +94,7 @@ def check_constraint_full_model(model, y):
     for i, smooth in enumerate(model.smooths):
         beta = model.coef_[model.coef_list[i]:model.coef_list[i+1]]
         constraint = smooth.constraint
-        V = check_constraint(beta, constraint=constraint, y=y, basis=model.basis)
+        V = check_constraint(beta, constraint=constraint)
         v += list(np.diag(V))
     
     return np.array(v, dtype=np.int)    
@@ -178,10 +154,6 @@ def find_peak_and_basis(x=None, y=None):
     x_peak, y_peak = x[peaks], y[peaks]
 
     s = Smooths(x_data=x, n_param=20)
-
-    s.basis[peaks]
-
-
 
     fig = go.Figure()
     for i in range(s.basis.shape[1]):

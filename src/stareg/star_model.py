@@ -105,13 +105,14 @@ class StarModel(BaseEstimator):
         
         self.basis = np.concatenate([smooth.basis for smooth in self.smooths], axis=1) 
         # generate the smootness penalty block matrix
-        self.smoothness_penalty_list = [s.lam["smoothness"] * s.smoothness_matrix().T @ s.smoothness_matrix() for s in self.smooths]
+        self.smoothness_penalty_list = [
+            s.lam["smoothness"] * s.smoothness_matrix(n_param=s.n_param).T @ s.smoothness_matrix(n_param=s.n_param) for s in self.smooths]
         self.smoothness_penalty_matrix = block_diag(*self.smoothness_penalty_list)
 
         n_coef_list = [0] + [np.product(smooth.n_param) for smooth in self.smooths]
         self.coef_list = np.cumsum(n_coef_list)            
                                                 
-    def create_constraint_penalty_matrix(self, beta_test=None, y=None):
+    def create_constraint_penalty_matrix(self, beta_test=None):
         """Create the penalty block matrix specified in self.description_str.
         
         Looks like: ----------------------------------- 
@@ -127,7 +128,6 @@ class StarModel(BaseEstimator):
         Parameters:
         ---------------
         beta_test  : array  - Test beta for sanity checks.
-        y          : array  - True y for the peak/valley constraint check
         
         TODO:
             [x]  include the weights !!! 
@@ -136,7 +136,6 @@ class StarModel(BaseEstimator):
         
         """
         assert (self.smooths is not None), "Run Model.create_basis() first!"
-        assert (y is not None), "Include y-data for peak/valley constraint!"
         
         if beta_test is None:
             beta_test = np.zeros(self.basis.shape[1])
@@ -146,7 +145,7 @@ class StarModel(BaseEstimator):
         for idx, smooth in enumerate(self.smooths):
             b = beta_test[self.coef_list[idx]:self.coef_list[idx+1]]
             D = smooth.penalty_matrix
-            V = check_constraint(beta=b, constraint=smooth.constraint, y=y, basis=smooth.basis)
+            V = check_constraint(beta=b, constraint=smooth.constraint)
             self.constraint_penalty_list.append(smooth.lam["constraint"] * D.T @ V @ D )
             
         self.constraint_penalty_matrix = block_diag(*self.constraint_penalty_list)
@@ -226,12 +225,12 @@ class StarModel(BaseEstimator):
             [x] incorporate TPS in the iterative fit
         """
         
-        X, y = check_X_y(X, y)
+        X, y = check_X_y(X, y.ravel())
         self = self.calc_LS_fit(X=X, y=y)
         df = self.create_df_for_beta(beta_init=self.coef_)
         
         for _ in range(max_iter):
-            self.create_constraint_penalty_matrix(beta_test=self.coef_, y=y)
+            self.create_constraint_penalty_matrix(beta_test=self.coef_)
             DVD = self.constraint_penalty_matrix
             DD = self.smoothness_penalty_matrix
             BB, By = self.basis.T @ self.basis, self.basis.T @ y
@@ -337,23 +336,6 @@ class StarModel(BaseEstimator):
             print("Fit the model to data!")
         return H
 
-    def calc_GCV_score(self, y):
-        """Calculate the generalized cross validation score according to Fahrmeir, Regression 2013 p.480
-        
-        Parameter:
-        ------------
-        y   : array  - target values
-
-        Returns:
-        ------------
-        GCV : float  - generalized cross validation score
-        
-        """
-        y_hat = self.basis @ self.coef_
-        n = y.shape[0]
-        trace = np.trace(self.calc_hat_matrix())
-        GCV = (1/n) * np.sum((y.ravel() - y_hat.ravel())**2 / (1 - trace/n))
-        return GCV
 
     def generate_GCV_parameter_list(self, n_grid=5, p_min=1e-4):
         """Generate the exhaustive parameter list for the GCV. 
@@ -385,6 +367,24 @@ class StarModel(BaseEstimator):
         grid = ParameterGrid(params)
 
         return grid
+
+    def calc_GCV_score(self, y):
+        """Calculate the generalized cross validation score according to Fahrmeir, Regression 2013 p.480
+        
+        Parameter:
+        ------------
+        y   : array  - target values
+
+        Returns:
+        ------------
+        GCV : float  - generalized cross validation score
+        
+        """
+        y_hat = self.basis @ self.coef_
+        n = y.shape[0]
+        trace = np.trace(self.calc_hat_matrix())
+        GCV = (1/n) * np.sum((y.ravel() - y_hat.ravel())**2 / (1 - trace/n))
+        return GCV
 
     def calc_GCV(self, X, y, n_grid=5, p_min=1e-4, plot_=False):
         """Carry out a cross validation for the model.
@@ -426,8 +426,7 @@ class StarModel(BaseEstimator):
         print(f"Violated Constraints: {np.sum(violated_constraints_list[np.argmin(gcv_scores)])} from {len(self.coef_)}")
 
         print("\n--- BEST FIT ACCORDING TO GCV ---")
-        descr_dict = self.set_params_after_gcv(params=gcv_best)
-        self.description_dict = descr_dict
+        self.set_params_after_gcv(params=gcv_best)
         self.fit(X=X, y=y, plot_=True)
         self.gcv_best = gcv_best
 
@@ -456,11 +455,11 @@ class StarModel(BaseEstimator):
 
     def set_params(self, params):
         """Sets the parameters of the object to the given in params.
-        Use self.get_params() as template
+        Use self.get_params() as template,
+        Only run after .create_basis(X=X) is run !
 
         Parameters:
         -----------
-
         params : dict of dict          : should have the form of self.get_params
         
         """
@@ -470,7 +469,7 @@ class StarModel(BaseEstimator):
                     setattr(smooth, str(key), value)
 
     def set_params_after_gcv(self, params):
-        """Sets the parameters after the GCV search. 
+        """Sets the lambda parameters after the GCV search. 
         Only run inside of calc_GCV.
 
         Parameters:
@@ -484,7 +483,8 @@ class StarModel(BaseEstimator):
             s = k[:idx]
             t = k[idx+1:]
             descr_dict[s]["lam"][t] = params[k]
-        return descr_dict
+
+        self.description_dict = descr_dict
          
     
     def plot_xy(self, x, y, title="Titel", name="Data", xlabel="xlabel", ylabel="ylabel"):
