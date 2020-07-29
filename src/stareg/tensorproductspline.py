@@ -1,18 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# **Tensor product spline implementation**
-
-# In[3]:
-
-
-# convert jupyter notebook to python script
-#get_ipython().system('jupyter nbconvert --to script tensorproductspline.ipynb')
-
-
-# In[1]:
-
-
 import numpy as np
 import plotly.graph_objects as go
 

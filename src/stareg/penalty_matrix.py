@@ -1,18 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# **Implementation of the penalty matrices**
-
-# In[1]:
-
-
-# convert jupyter notebook to python script
-#get_ipython().system('jupyter nbconvert --to script penalty_matrix.ipynb')
-
-
-# In[39]:
-
-
 import numpy as np
 from scipy.sparse import diags
 from scipy.linalg import block_diag
@@ -107,7 +95,7 @@ class PenaltyMatrix():
         TODO:
         - [ ] boundary cases if peak is far left or far right
         """
-        
+
         assert (y_data is not None), "Include real y_data!!!"
         assert (basis is not None), "Include basis!"
         assert (n_param != 0), "Include n_param!!!"
@@ -168,9 +156,6 @@ class PenaltyMatrix():
         valley[left_border_spline_idx-2, left_border_spline_idx-1] = -1
         return valley
         
-
-
-# In[46]:
 
 
 

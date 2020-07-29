@@ -1,16 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[3]:
-
-
-# convert jupyter notebook to python script
-#get_ipython().system('jupyter nbconvert --to script bspline.ipynb')
-
-
-# In[20]:
-
-
 import numpy as np
 import plotly.graph_objects as go
 
@@ -62,7 +52,7 @@ class Bspline(PenaltyMatrix):
 
         if not hasattr(self, 'm'):
             self.m = m
-        if type(x_data) is np.ndarray:
+        if isinstance(x_data, np.ndarray):
             self.x = x_data
         else:
             print(f"Datatype for 'x':{type(x_data)} not supported!")

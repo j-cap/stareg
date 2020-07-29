@@ -75,13 +75,12 @@ def check_peak_constraint(beta):
     v = np.array(left+right+[False])
     return v.astype(np.int)
 
-def check_constraint_full_model(model, y):
+def check_constraint_full_model(model):
     """Checks if the coefficients in the model violate the given constraints.
     
     Parameters:
     -------------
     model : class StarModel()       - instance of StarModel to test the constraints for
-    y     : array                   - target data for the peak/valley test
 
     Returns:
     -------------

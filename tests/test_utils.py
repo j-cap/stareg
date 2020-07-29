@@ -136,6 +136,13 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(V.shape, (self.n_param-1, self.n_param-1))
         self.assertTrue(np.array_equal(V, V.astype(bool)))
 
+    def test_check_constraint_full_model(self):
+        descr = ( ("s(1)", "smooth", self.n_param, (1, 100), "quantile"), )
+        M = StarModel(descr=descr)
+        M.fit(X=self.x.reshape(-1, 1), y=self.y, plot_=False)
+        v = check_constraint_full_model(model=M)
+        self.assertEqual(v.sum(), self.n_param-2)
+
 
 
 if __name__ == "__main__":
