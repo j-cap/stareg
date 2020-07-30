@@ -1,18 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import pathlib
 from setuptools import setup, find_packages
-
-# The directory containing this file
-HERE = pathlib.Path(__file__).parent
-
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="stareg_jcap", # the name of your package as it will appear on PyPI
+    name="stareg", # the name of your package as it will appear on PyPI
     version="1.0.0",    # 0.0.x imply that it is unstable
     url="https://github.com/j-cap/stareg",
     author="Jakob Weber",
@@ -26,8 +21,7 @@ setup(
         "tensorproductspline",
         "utils" 
         ], # list of actual python code modules -> this is what is imported
-    package_dir={"": "stareg"}, # code is in the src directory
-    packages=find_packages(exclude=("tests",))
+    packages=find_packages(exclude=("tests",)),
     license="MIT",
     classifiers=[ # to search for it on PyPI
         "Programming Language :: Python :: 3",
@@ -51,4 +45,5 @@ setup(
             "pytest>=3.7",
         ],
     },
+    python_requires=">=3.6",
 )
