@@ -8,8 +8,18 @@ from .utils import add_vert_line
 from .penalty_matrix import PenaltyMatrix
 
 class Bspline(PenaltyMatrix):
-    
+    """Implementation of B-splines according to de Boor, 1978."""
+
     def __init__(self, order="cubic"):
+        """Initialization.
+
+        Parameters
+        ----------
+        order : str
+            Order of the spline, default is 'cubic'.
+
+        """
+    
         self.order = order
         self.basis = None
         self.knots = None
@@ -18,13 +28,20 @@ class Bspline(PenaltyMatrix):
 
     def bspline(self, k, i, m=2):
         """Compute the i-th b-spline basis function of order m at the values given in x.
+        
+        Note
+        ---
         Not intended to be run as standalone function.
         
-        Parameter:
-        ---------------------
-        k   : array   - of knot locations
-        i   : int     - index of the b-spline basis function to compute
-        m   : int     - order of the spline, default is 2 (cubic)
+        Parameters
+        ----------
+        k : array
+            Array of knot locations.
+        i : int
+            Index of the b-spline basis function to compute.
+        m : int
+            Order of the spline, default is 2.
+        
         """
         if m==-1:
             # return 1 if x is in {k[i], k[i+1]}, otherwise 0
@@ -37,16 +54,22 @@ class Bspline(PenaltyMatrix):
                 
     def bspline_basis(self, x_data=None, k=10, m=2, type_="quantile"):
         """Set up model matrix for the B-spline basis.
+
+        Note
+        ---
         One needs k + m + 1 knots for a spline basis of order m with k parameters. 
         If self.x is defined, x_data is not used!
         
-        Parameters:
-        -------------
-        k : integer   - number of parameters (== number of B-splines)
-        m : interger  - specifies the order of the spline, m+1 = order
-        x_data : None, ndarray - for the case that no x was defined
-                                  in the initialization of the BSpline
-        type_ : string  - either "quantile" or "equidistant"
+        Parameters
+        ----------
+        k : int
+            Number of parameters (== number of B-splines).
+        m : int
+            Specifies the order of the spline, m+1 = order.
+        x_data : np.ndarray
+            Data of shape (n_samples, ) to compute the B-spline with.
+        type_ : str
+            Describes the knot placement, either 'quantile' or 'equidistant'.
         
         """
 
@@ -87,11 +110,16 @@ class Bspline(PenaltyMatrix):
 
     def plot_basis(self, title=""):
         """Plot the B-spline basis matrix and the knot loactions.
-        They are indicated by a vertical line.
 
-        TODO:
-        - [ ] rework this function
+        Parameters
+        ----------
+        title : str
+            Title on the figure. 
+
         """
+        # TODO:
+        # - [ ] rework this function
+        
         if self.basis is None or self.knots is None:
             k = 10
             self.bspline_basis(k=k, m=self.m)

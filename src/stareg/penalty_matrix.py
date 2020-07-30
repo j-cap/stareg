@@ -7,23 +7,29 @@ from scipy.linalg import block_diag
 from scipy.signal import find_peaks
 
 class PenaltyMatrix():
-
     """Implementation of the various penalty matrices for penalized B-Splines."""
-    def __init__(self, n_param=10):
-        self.n_param = n_param
+    
+    def __init__(self):
+        """Initialization.
+              
+        """
+        pass
                 
     def d1_difference_matrix(self, n_param=0):
         """Create the first order difference matrix.  
         
-        Parameters:
-        ------------
-        n_param : integer  - Dimension of the difference matrix, overwrites
-                             the specified dimension.
+        Parameters
+        ----------
+        n_param : int
+            Dimension of the difference matrix.
         
-        Returns:
-        ------------
-        d1 : ndarray  - a matrix of size [k x k-1], 
+        Returns
+        -------
+        d1 : np.ndarray
+            D1 penalty matrix of size (n_param-1 x n_param), 
+
         """        
+
         assert (n_param != 0), "Include n_param!!!"
         d = np.array([-1*np.ones(n_param), np.ones(n_param)])
         offset=[0,1]
@@ -34,15 +40,18 @@ class PenaltyMatrix():
     def d2_difference_matrix(self, n_param=0):
         """Create the second order difference matrix. 
 
-        Parameters:
-        ------------
-        n_param : integer  - Dimension of the difference matrix, overwrites
-                             the specified dimension.
-        
-        Returns:
-        ------------
-        d2 : ndarray  - a matrix of size [k x k-2], 
+        Parameters
+        ----------
+        n_param : int
+            Dimension of the difference matrix.
+
+        Returns
+        -------
+        d2 : np.ndarray 
+            D2 penalty matrix of size (n_param-1 x n_param), 
+
         """
+
         assert (n_param != 0), "Include n_param!!!"
         d = np.array([np.ones(n_param), -2*np.ones(n_param), np.ones(n_param)])
         offset=[0,1,2]
@@ -53,19 +62,16 @@ class PenaltyMatrix():
     def smoothness_matrix(self, n_param=0):
         """Create the smoothness penalty matrix according to Hofner 2012.
         
-        Parameters:
-        -------------
-        n_param : integer  - Dimension of the difference matrix, overwrites
-                             the specified dimension.
+        Parameters
+        ------------
+        n_param : int
+            Dimension of the smoothnes matrix.
         
-        Returns:
-        -------------
-        s  : ndarray  -  Peak penalty matrix of size [k x k] of the form 
-                         |1 -2  1  0 0 . . . |
-                         |0  1 -2  1 0 . . . |
-                         |0  0  1 -2 1 . . . |
-                         |.  .  .  . . . . . |
-                         |.  .  .  . . . . . |
+        Returns
+        -------
+        s : np.ndarray
+            Smoothnes constraint matrix of size (n_param-2 x n_param).
+
         """
 
         assert (n_param != 0), "Include n_param!!!"
@@ -78,36 +84,40 @@ class PenaltyMatrix():
             
     
     def peak_matrix(self, n_param=0, y_data=None, basis=None):
-        """Create the peak penalty matrix. Mon. inc. till the peak, then mon. dec.
+        """Create the peak constraint matrix. 
         
-        Parameters:
-        -------------
-        n_param : integer  - Dimension of the difference matrix, overwrites
-                             the specified dimension.
-        y_data  : array    - Array of data to find the peak location.
-        basis   : ndarray or None  - BSpline basis for the x,y data.
-                                     Only given, when Peak_matrix() is called outside of class Smooth()
+        Note
+        ---
+        Monotonic increasing till the peak, then monotonic decreasing.
         
-        Returns:
-        -------------
-        peak  : ndarray  -  Peak penalty matrix of size [k-1 x k]
+        Parameters
+        ----------
+        n_param : int
+            Dimension of the peak matrix.
+        y_data : array
+            Array of data to find the peak location.
+        basis : ndarray
+            BSpline basis for the X data. 
+        
+        Returns
+        -------
+        peak : np.ndarray
+            Peak constraint matrix of size (n_param-1 x n_param)
 
-        TODO:
-        - [ ] boundary cases if peak is far left or far right
         """
-
+        # TODO:
+        # - [ ] boundary cases if peak is far left or far right
+        
         assert (y_data is not None), "Include real y_data!!!"
         assert (basis is not None), "Include basis!"
         assert (n_param != 0), "Include n_param!!!"
            
         # find the peak index
         peak, properties = find_peaks(x=y_data, distance=int(len(y_data)))
-        
         # find idx of affected splines
         border = np.argwhere(basis[peak,:] > 0)
         left_border_spline_idx = int(border[0][1])
         right_border_spline_idx = int(border[-1][1])
-        
         # create inc, zero and dec penalty matrices for the corresponding ares
         inc_matrix = self.d1_difference_matrix(n_param=left_border_spline_idx)
         plateu_matrix = np.zeros((len(border), len(border)), dtype=np.int)
@@ -118,36 +128,40 @@ class PenaltyMatrix():
         return peak
         
     def valley_matrix(self, n_param=0, y_data=None, basis=None):
-        """Create the valley penalty matrix. Mon. dec. till the valley, then mon. inc.
+        """Create the valley constraint matrix. 
         
-        Parameters:
-        -------------
-        n_param : integer  - Dimension of the difference matrix, overwrites
-                             the specified dimension.
-        y_data  : array    - Array of data to find the valley location.
-        basis   : ndarray or None  - BSpline basis for the x,y data.
-                                     Only given, when Valley_matrix() is called outside of class Smooth()
+        Note
+        ---
+        Monotonic decreasing till the valley, then monotonic increasing.
         
-        Returns:
-        -------------
-        valley  : ndarray  -  valley penalty matrix of size [k-1 x k]
+        Parameters
+        ----------
+        n_param : int
+            Dimension of the valley constraint matrix.
+        y_data : array
+            Array of data to find the valley location.
+        basis : np.ndarray
+            BSpline basis for the X data.
+            
+        Returns
+        -------
+        valley : np.ndarray
+            Valley constraint matrix of size (n_param-1 x n_param)
 
-        TODO:
-        - [ ] boundary cases if valley is far left or far right
         """
-        
+        # TODO:
+        # - [ ] boundary cases if valley is far left or far right
+                
         assert (y_data is not None), "Include real y_data!!!"
         assert (basis is not None), "Include basis!"
         assert (n_param != 0), "Include n_param!!!"
 
         # find the valley index
         valley, properties = find_peaks(x=-y_data, distance=int(len(y_data)))
-        
         # find idx of affected splines
         border = np.argwhere(basis[valley,:] > 0)
         left_border_spline_idx = int(border[0][1])
         right_border_spline_idx = int(border[-1][1])
-        
         # create dec, zero and inc penalty matrices for the corresponding ares
         inc_matrix = -1* self.d1_difference_matrix(n_param=left_border_spline_idx)
         plateu_matrix = np.zeros((len(border), len(border)), dtype=np.int)
@@ -156,7 +170,3 @@ class PenaltyMatrix():
         valley[left_border_spline_idx-2, left_border_spline_idx-1] = -1
         return valley
         
-
-
-
-
