@@ -8,7 +8,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="stareg", # the name of your package as it will appear on PyPI
-    version="1.0.0",    # 0.0.x imply that it is unstable
+    version="1.0.1",    # 0.0.x imply that it is unstable
     url="https://github.com/j-cap/stareg",
     author="Jakob Weber",
     author_email="jakobweber@hotmail.com",
