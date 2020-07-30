@@ -27,7 +27,7 @@ class StarModel(BaseEstimator):
     """Implementation of a structured additive regression model.
 
     Fit data in the form of (X, y) using the structured additive regression model of
-    Fahrmeir, Regression 2013 Cha. 9. Also incorporate prior knowledge in form of 
+    Fahrmeir, Regression 2013 Cha. 9. Also incorporates prior knowledge in form of 
     shape constraints, e.g. increasing, decreasing, convex, concave, peak, valley. 
 
     """
@@ -38,11 +38,24 @@ class StarModel(BaseEstimator):
         Parameters
         ----------
         description: tuple
-            Description of the model using the scheme: 
+            Description of the model
+
+            Note
+            ----       
+            Using the scheme for the description tuple:
+
             (type of smooth, type of constraint, number of knots, lambdas, knot_type), 
-            e.g. description =( ("s(1)", "smooth", 25, (1, 100), "equidistant"),
-                                ("s(2)", "inc", 25, (1, 100), "quantile"), 
-                                ("t(1,2)", "smooth", [5,5], (1, 100), "quantile"), ).
+            
+            e.g. description = 
+            ( 
+            
+                ("s(1)", "smooth", 25, (1, 100), "equidistant"),
+
+                ("s(2)", "inc", 25, (1, 100), "quantile"), 
+                
+                ("t(1,2)", "smooth", [5,5], (1, 100), "quantile"), 
+            
+            ).
                         
         """
 

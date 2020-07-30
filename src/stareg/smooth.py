@@ -81,6 +81,7 @@ class TensorProductSmooths(TensorProductSpline):
         """Create the tensor product spline basis as well as the smoothness penalty matrices.
         
         Parameters
+        ----------
         x_data : array 
             Data of shape (n_samples, 2) to build the TP-spline basis for.
         n_param : tuple
@@ -93,8 +94,10 @@ class TensorProductSmooths(TensorProductSpline):
             Describes the knot placement, either "quantile" or "equidistant".
         
         """
+
         # TODO:
-        # - [ ] constraints need to be implemented         
+        # - [ ] constraints need to be implemented
+
         self.x_data = x_data
         self.x1, self.x2 = x_data[:,0], x_data[:,1]
         self.n_param = n_param

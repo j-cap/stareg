@@ -3,10 +3,8 @@
 
 import numpy as np
 import plotly.graph_objects as go
-
 from plotly.subplots import make_subplots
 from scipy.sparse import kron
-
 from .bspline import Bspline
 from .penalty_matrix import PenaltyMatrix
 
