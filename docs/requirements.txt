@@ -4,5 +4,3 @@ plotly==4.5.4
 scikit-learn==0.22.2.post1
 scipy==1.4.1
 sklearn==0.0
-# Editable install with no version control (stareg==1.1.0)
--e c:\users\jakob\anaconda3\envs\thesis\lib\site-packages
