@@ -14,7 +14,7 @@ import sphinx_rtd_theme
 import os
 import sys
 sys.path.insert(0, os.path.abspath('.'))
-sys.path.append('..\\stareg\\')
+sys.path.append('..')
 
 # -- Project information -----------------------------------------------------
 
@@ -23,7 +23,7 @@ copyright = '2020, Jakob Weber'
 author = 'Jakob Weber'
 
 # The full version, including alpha/beta/rc tags
-release = '1.0'
+release = '1.1.0'
 
 
 # -- General configuration ---------------------------------------------------
