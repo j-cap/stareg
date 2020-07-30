@@ -7,8 +7,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="stareg",  # this is what you pip install
-    version="0.0.2",    # 0.0.x imply that it is unstable
+    name="stareg-j-cap",
+    version="0.0.1",    # 0.0.x imply that it is unstable
     url="https://github.com/j-cap/stareg",
     author="Jakob Weber",
     author_email="jakobweber@hotmail.com",
@@ -19,10 +19,9 @@ setup(
         "smooth",
         "star_model",
         "tensorproductspline",
-        "Code_snippets", 
-        "TestFunctions"
+        "utils" 
         ], # list of actual python code modules -> this is what is imported
-    package_dir={"": "src"}, # code is in the src directory
+    package_dir={"": "src\\stareg\\"}, # code is in the src directory
     classifiers=[ # to search for it on PyPI
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",

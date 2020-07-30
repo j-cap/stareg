@@ -5,4 +5,3 @@ plotly==4.5.4
 scikit-learn==0.22.2.post1
 scipy==1.4.1
 sklearn==0.0
--e git+https://github.com/j-cap/stareg.git@874546b0d110c4e7c816e0631286bdfccd4fb409#egg=stareg
