@@ -1,9 +1,9 @@
 
 
 import unittest
-from src.stareg.utils import check_constraint, check_constraint_full_model
-from src.stareg.utils import check_valley_constraint, check_peak_constraint
-from src.stareg.star_model import StarModel
+from stareg.utils import check_constraint, check_constraint_full_model
+from stareg.utils import check_valley_constraint, check_peak_constraint
+from stareg.star_model import StarModel
 import numpy as np
 
 class TestUtils(unittest.TestCase):
@@ -138,7 +138,7 @@ class TestUtils(unittest.TestCase):
 
     def test_check_constraint_full_model(self):
         descr = ( ("s(1)", "smooth", self.n_param, (1, 100), "quantile"), )
-        M = StarModel(descr=descr)
+        M = StarModel(description=descr)
         M.fit(X=self.x.reshape(-1, 1), y=self.y, plot_=False)
         v = check_constraint_full_model(model=M)
         self.assertEqual(v.sum(), self.n_param-2)

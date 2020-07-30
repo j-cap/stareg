@@ -2,7 +2,7 @@
 # coding: utf-8
 
 import unittest
-from src.stareg.tensorproductspline import TensorProductSpline
+from stareg.tensorproductspline import TensorProductSpline
 import numpy as np
 
 

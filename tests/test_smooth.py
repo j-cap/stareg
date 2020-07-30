@@ -2,7 +2,7 @@
 # coding: utf-8
 
 import unittest
-from src.stareg.smooth import Smooths, TensorProductSmooths
+from stareg.smooth import Smooths, TensorProductSmooths
 import numpy as np
 
 

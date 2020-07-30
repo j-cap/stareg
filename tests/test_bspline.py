@@ -3,7 +3,7 @@
 
 import unittest
 import numpy as np
-from src.stareg.bspline import Bspline
+from stareg.bspline import Bspline
 
 
 class TestBspline(unittest.TestCase):

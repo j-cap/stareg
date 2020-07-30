@@ -3,7 +3,7 @@
 
 
 import unittest
-from src.stareg.star_model import StarModel
+from stareg.star_model import StarModel
 import numpy as np
 
 class TestStarModel(unittest.TestCase):
@@ -15,7 +15,7 @@ class TestStarModel(unittest.TestCase):
         self.y = np.exp(-(self.x - 0.4)**2 / 0.01)
         self.n_params = 25
         self.descr_str =( ("s(1)", "smooth", 25, (1, 100), "equidistant"), )
-        self.M = StarModel(descr=self.descr_str)
+        self.M = StarModel(description=self.descr_str)
 
     def tearDown(self):
         del self.M
@@ -48,7 +48,7 @@ class TestStarModel(unittest.TestCase):
                      ("s(2)", c2, 25, (1, 100), "quantile"),  )
         x = np.random.random(200).reshape(100,2)
         x.sort(axis=0)
-        M = StarModel(descr=descr_str)
+        M = StarModel(description=descr_str)
         M.calc_LS_fit(X=x, y=y)
         M.create_constraint_penalty_matrix(beta_test=M.coef_)
         self.assertEqual(M.constraint_penalty_matrix.shape, (2*descr_str[0][2], 2*descr_str[1][2]))
@@ -63,7 +63,7 @@ class TestStarModel(unittest.TestCase):
                      ("s(2)", "smooth", 25, (1, 100), "quantile"),  )
         x = np.random.random(200).reshape(100,2)
         x.sort(axis=0)
-        M = StarModel(descr=descr_str)
+        M = StarModel(description=descr_str)
         M.create_basis_for_prediction(X=x)
         self.assertEqual(M.basis_for_prediction.shape, (x.shape[0], 50))
 
@@ -79,7 +79,7 @@ class TestStarModel(unittest.TestCase):
         x = np.random.random(200).reshape(100,2)
         x.sort(axis=0)
         y = np.sin(x[:,0]) + x[:,0]*x[:,1]
-        M = StarModel(descr=descr_str)
+        M = StarModel(description=descr_str)
         M.calc_LS_fit(X=x, y=y)
         
         self.assertEqual(len(M.coef_), M.basis.shape[1])
@@ -104,7 +104,7 @@ class TestStarModel(unittest.TestCase):
         x = np.random.random(200).reshape(100,2)
         x.sort(axis=0)
         y = np.sin(x[:,0]) + x[:,0]*x[:,1]
-        M = StarModel(descr=descr_str)
+        M = StarModel(description=descr_str)
         M = M.fit(X=x, y=y, plot_=False)
         self.assertEqual(len(M.coef_), M.basis.shape[1])
 
@@ -125,7 +125,7 @@ class TestStarModel(unittest.TestCase):
         x = np.random.random(200).reshape(100,2)
         x.sort(axis=0)
         y = np.sin(x[:,0]) + x[:,0]*x[:,1]
-        M = StarModel(descr=descr_str)
+        M = StarModel(description=descr_str)
         M = M.fit(X=x, y=y, plot_=False)
         H = M.calc_hat_matrix()
         self.assertEqual(H.shape, (x.shape[0], x.shape[0]))
@@ -142,7 +142,7 @@ class TestStarModel(unittest.TestCase):
         x = np.random.random(200).reshape(100,2)
         x.sort(axis=0)
         y = np.sin(x[:,0]) + x[:,0]*x[:,1]
-        M = StarModel(descr=descr_str)
+        M = StarModel(description=descr_str)
         M = M.fit(X=x, y=y, plot_=False)
         gcv = M.calc_GCV_score(y=y)
         self.assertEqual(type(gcv), np.float64)
@@ -167,7 +167,7 @@ class TestStarModel(unittest.TestCase):
                      ("s(2)", "smooth", 25, (1, 100), "quantile"),  )
         x = np.random.random(200).reshape(100,2)
         x.sort(axis=0)
-        M = StarModel(descr=descr_str)
+        M = StarModel(description=descr_str)
         n_grid, p_min = 5, 1e-4
         grid = M.generate_GCV_parameter_list(n_grid=n_grid, p_min=p_min)
         i, c = 0, np.inf
@@ -191,7 +191,7 @@ class TestStarModel(unittest.TestCase):
                      ("s(2)", "smooth", 25, (1, 100), "quantile"),  )
         x = np.random.random(200).reshape(100,2)
         x.sort(axis=0)
-        M = StarModel(descr=descr_str)
+        M = StarModel(description=descr_str)
         d = M.get_params()
         self.assertTrue(type(d) == dict)
         self.assertTrue(len(d.keys()) == 2)
@@ -217,7 +217,7 @@ class TestStarModel(unittest.TestCase):
                      ("t(1,2)", "smooth", (5,5), (1, 100), "equidistant"), )
         x = np.random.random(200).reshape(100,2)
         x.sort(axis=0)
-        M = StarModel(descr=descr_str)
+        M = StarModel(description=descr_str)
         M.create_basis(X=x)
         d = M.get_params()
         d["s(1)"]["constraint"] = "CHANGED"     
@@ -260,7 +260,7 @@ class TestStarModel(unittest.TestCase):
                      ("t(1,2)", "smooth", (5,5), (1,100), "quantile"), )
         x = np.random.random(200).reshape(100,2)
         x.sort(axis=0)
-        M = StarModel(descr=descr_str)
+        M = StarModel(description=descr_str)
         d = dict()
         d["s(1)_constraint"] = "CHANGED"
         d["s(1)_smoothness"] = "CHANGED"     

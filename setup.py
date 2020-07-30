@@ -1,14 +1,19 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from setuptools import setup
+import pathlib
+from setuptools import setup, find_packages
+
+# The directory containing this file
+HERE = pathlib.Path(__file__).parent
+
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="stareg-j-cap",
-    version="0.0.1",    # 0.0.x imply that it is unstable
+    name="stareg_jcap", # the name of your package as it will appear on PyPI
+    version="1.0.0",    # 0.0.x imply that it is unstable
     url="https://github.com/j-cap/stareg",
     author="Jakob Weber",
     author_email="jakobweber@hotmail.com",
@@ -21,7 +26,9 @@ setup(
         "tensorproductspline",
         "utils" 
         ], # list of actual python code modules -> this is what is imported
-    package_dir={"": "src\\stareg\\"}, # code is in the src directory
+    package_dir={"": "stareg"}, # code is in the src directory
+    packages=find_packages(exclude=("tests",))
+    license="MIT",
     classifiers=[ # to search for it on PyPI
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
@@ -33,9 +40,10 @@ setup(
     long_description_content_type="text/markdown",
     install_requires = [ # describe the used libraries and versions, e.g. pandas, numpy == production 
                          # dependencies -> versions should be as relaxed as possible
-        "pandas >= 1.0.2",
-        "sklearn >= 0.0",
-        "plotly >= 4.5.4"
+        "numpy",
+        "pandas",
+        "sklearn",
+        "plotly"
     ],
     extras_require = {  # for optional dependencies, e.g testing 
                         #  -> versions should be as specific as possible 
