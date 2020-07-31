@@ -290,6 +290,61 @@ class StarModel(BaseEstimator):
             self.plot_fit(X=X, y=y).show()
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self
+
+    def weighted_fit(self, X, y, critical_point=None, plot_=True, max_iter=5):
+        """Calculate a weighted PIRLS fit that goes through the critical point. 
+
+        """
+        assert (X.shape[1] == 1), "Only 1-d fits currently possible!"
+        if critical_point is None:
+            print("Insert a critical point!")
+            return None
+        
+        #x_new = np.append(X, critical_point[0])
+        #x_new.sort()
+        #idx_x_new = np.where(x_new == critical_point[0])[0][0]
+        #y_new = np.insert(arr=y, obj=idx_x_new, values=critical_point[1])
+        #x_new, y_new = x_new.reshape(-1,1), y_new.ravel()
+        # weight matrix creation
+        x = X
+        
+        w = np.ones(x.shape[0]+len(critical_point))
+        for cp in critical_point:
+            x = np.append(x, cp[0])
+            x.sort()
+            idx_x = np.where(x == cp[0])[0][0]
+            y = np.insert(arr=y, obj=idx_x, values=cp[1])
+
+            w[idx_x] = 1000
+            print("w[idx_x_new] = ", w[idx_x])
+    
+        x, y = x.reshape(-1,1), y.ravel()
+        w = np.diag(w)
+
+        X, y = check_X_y(x, y.ravel())
+        self = self.calc_LS_fit(X=X, y=y)
+        df = self.create_df_for_beta(beta_init=self.coef_)
+        
+        for _ in range(max_iter):
+            self.create_constraint_penalty_matrix(beta_test=self.coef_)
+            DVD = self.constraint_penalty_matrix
+            DD = self.smoothness_penalty_matrix
+            BwB, Bwy = self.basis.T @ w @ self.basis, self.basis.T @ (np.diag(w) * y)
+            v_old = check_constraint_full_model(model=self)
+            beta_new = (np.linalg.pinv(BwB + DD + DVD) @ Bwy).ravel()
+            v_new = check_constraint_full_model(model=self)
+            self.coef_ = beta_new                       
+            df = df.append(pd.DataFrame(data=beta_new.reshape(1,-1), columns=df.columns))
+            delta_v = np.sum(v_new - v_old)
+            if delta_v == 0: 
+                break
+
+        self.df = df
+        self.mse = mean_squared_error(y, self.basis @ self.coef_)       
+        if plot_: 
+            self.plot_fit(X=X, y=y).show()
+            print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
+        return self      
     
     def plot_fit(self, X, y):
         """Plot the fitted model and the given data.
