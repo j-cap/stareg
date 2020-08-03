@@ -277,10 +277,13 @@ class StarModel(BaseEstimator):
             BB, By = self.basis.T @ self.basis, self.basis.T @ y
             v_old = check_constraint_full_model(model=self)
             beta_new = (np.linalg.pinv(BB + DD + DVD) @ By).ravel()
-            v_new = check_constraint_full_model(model=self)
             self.coef_ = beta_new                       
+            v_new = check_constraint_full_model(model=self)
             df = df.append(pd.DataFrame(data=beta_new.reshape(1,-1), columns=df.columns))
             delta_v = np.sum(v_new - v_old)
+            #print("Delta v: ", delta_v)
+            # change the criteria to the following: 
+            #print("Differences at the following coefficients: ", np.argwhere(v_old != v_new))
             if delta_v == 0: 
                 break
 
@@ -290,7 +293,60 @@ class StarModel(BaseEstimator):
             self.plot_fit(X=X, y=y).show()
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self
-    
+
+    def plot_cost_function_partition(self, y, print_=True):
+        """Plot the partition of the cost function.
+
+        Q(beta) = || y - X*beta ||^2 + lam_1*J_smooth(betea) + lam_2*J_constraint(beta). 
+        Currently only in 1D.
+
+        Parameters:
+        -----------
+        y : np.array
+            Target data to calculate the MSE.
+        print_ : bool
+            Indicator whether to print more information.
+
+        Returns:
+        --------
+        fig : plotly.graph_objs.Figure
+
+        """
+        # smoothness part of the cost function
+        P = PenaltyMatrix()
+        S = P.smoothness_matrix(n_param=self.smooths[0].n_param)
+        lam_s = self.description_dict["s(1)"]["lam"]["smoothness"]
+        lam_c = self.description_dict["s(1)"]["lam"]["constraint"]
+        J = self.coef_.T @ S.T @ S @ self.coef_
+        P = self.smooths[0].penalty_matrix
+        J_constr = self.coef_.T @ P.T @ np.diag(check_constraint_full_model(model=self)) @ P @ self.coef_
+        D = mean_squared_error(y, self.basis @ self.coef_)
+
+        J_pre = self.LS_coef_ @ S.T @ S @ self.LS_coef_
+        J_constr_pre = self.LS_coef_ @ P.T @ P @ self.LS_coef_
+        D_pre = mean_squared_error(y, self.basis @ self.LS_coef_)
+
+        fig = go.Figure(data=[go.Pie(labels=["Data", "Smoothness", "Constraint"], values=[D, J, J_constr])])
+        fig.update_layout(title="Cost function partition")
+
+        fig2 = go.Figure(data=[go.Pie(labels=["Data", "Smoothness", "Constraint"], values=[D_pre, J_pre, J_constr_pre])])
+        fig2.update_layout(title="Cost function partition")
+
+
+        if print_:
+            print("Values without lambdas: ")
+            print("J(beta) = ", J)
+            print("J_constr(beta) = ", J_constr)
+            print("D(beta) = ", D)
+        
+
+            print("Values without lambdas and LS fit: ")
+            print("J_pre(beta) = ", J_pre)
+            print("J_constr_pre(beta) = ", J_constr_pre)
+            print("D_pre(beta) = ", D_pre)
+
+        return fig, fig2
+
     def plot_fit(self, X, y):
         """Plot the fitted model and the given data.
 
@@ -413,7 +469,7 @@ class StarModel(BaseEstimator):
             for k2, v2 in self.description_dict[k]["lam"].items():
                 params[k+"_"+k2] = v2        
 
-        for k,v in params.items():
+        for k in params.keys():
             spacing = np.geomspace(p_min, p_min*10**n_grid, n_grid, endpoint=False)
             lam_type = k[k.find("_")+1]
             if lam_type == "s":
@@ -476,9 +532,9 @@ class StarModel(BaseEstimator):
         X, y = check_X_y(X=X, y=y)
         grid = self.generate_GCV_parameter_list(n_grid=n_grid, p_min=p_min)
         gcv_scores, violated_constraints_list = [], []
-        for idx, params in enumerate(grid):
+        for params in grid:
             for k,v in params.items():
-                for k2, v2 in self.description_dict.items():
+                for k2 in self.description_dict.keys():
                     if k[:k.find("_")] == k2:
                         self.description_dict[k2]["lam"][k[k.find("_")+1:]] = v
             #print("\n Parameters: ", params)
