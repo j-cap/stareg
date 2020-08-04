@@ -102,6 +102,7 @@ class Bspline(PenaltyMatrix):
         self.x = x_data
         self.basis = X
         self.knots = xk
+        
         self.knot_type = type_
         self.n_param = int(X.shape[1])
     
