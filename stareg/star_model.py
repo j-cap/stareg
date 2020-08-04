@@ -161,34 +161,6 @@ class StarModel(BaseEstimator):
             self.constraint_penalty_list.append(smooth.lam["constraint"] * P.T @ V @ P )
         #  self.constraint_penalty_matrix is already lambda P.T @ V @ P.T
         self.constraint_penalty_matrix = block_diag(*self.constraint_penalty_list)
-
-    def create_basis_for_prediction(self, X=None):
-        """Creates the BSpline basis for the data X.
-        
-        Reads through the description dictionary and creates either
-        Smooths or TensorProductSmooths with given parameters according 
-        to the description dictionary using the data given in X.
-
-        Parameters
-        ----------
-        X : np.ndarray
-            Data of size (n_pred_samples, n_dimensions).
-
-        """
-
-        self.pred_smooths = list()
-        if len(X.shape) == 1:
-            X = X.reshape(len(X), -1)
-
-        for k,v in self.description_dict.items():
-            if k.startswith("s"):
-                self.pred_smooths.append(
-                    s(x_data=X[:,int(k[2])-1], n_param=v["n_param"], type_=v["knot_type"]))
-            elif k.startswith("t"):
-                self.pred_smooths.append(
-                    tps(x_data=X[:, [int(k[2])-1, int(k[4])-1]], n_param=list(v["n_param"]), type_=v["knot_type"]))    
-        
-        self.basis_for_prediction = np.concatenate([smooth.basis for smooth in self.pred_smooths], axis=1)
     
     def calc_LS_fit(self, X, y):
         """Calculate the basis least squares fit without penalties.
@@ -419,7 +391,6 @@ class StarModel(BaseEstimator):
         """
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
 
-
         #  y_pred = np.zeros((len(self.smooths), X_pred.shape[0]))
         #  for i, sp in enumerate(X_pred):
         #      for i2, (x_i, s) in enumerate(zip(sp, self.smooths)):
@@ -428,6 +399,24 @@ class StarModel(BaseEstimator):
         
         y_pred = np.array([self.smooths[0].spp(sp=i, coef_=self.coef_) for i in X_pred])
         return y_pred
+
+    def predict_single_point(self, x_sp):
+        """Fast single point prediction.
+
+        Currently only 1-DIMENSIONAL prediction possible !!!
+
+        Parameter
+        ----------
+        x_sp : float
+            Single point data.
+
+        Returns
+        -------
+        y_sp : float
+            Predicted value.
+
+        """
+        return self.smooths[0].spp(sp=x_sp, coef_=self.coef_)
 
         
     def calc_hat_matrix(self):
