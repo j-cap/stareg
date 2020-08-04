@@ -66,6 +66,7 @@ class StarModel(BaseEstimator):
                 "knot_type": k
                } 
             for t, p, n, l, k  in self.description_str}
+        self.smooths_list = list(self.description_dict.keys())
         self.smooths = None
         self.coef_ = None
         
@@ -119,7 +120,7 @@ class StarModel(BaseEstimator):
         self.basis = np.concatenate([smooth.basis for smooth in self.smooths], axis=1) 
         self.smoothness_penalty_list = [
             s.lam["smoothness"] * s.smoothness_matrix(n_param=s.n_param).T @ s.smoothness_matrix(n_param=s.n_param) for s in self.smooths]
-        # self.smoothness_penalty_matrix is already lambda * S.T @ S
+        #  self.smoothness_penalty_matrix is already lambda * S.T @ S
         self.smoothness_penalty_matrix = block_diag(*self.smoothness_penalty_list)
 
         n_coef_list = [0] + [np.product(smooth.n_param) for smooth in self.smooths]
@@ -136,18 +137,18 @@ class StarModel(BaseEstimator):
             Array of coefficients to be tested against the given constraints.
                 
         """
-        # Looks like: ----------------------------------- 
-        #            |lam1*p1 0        0        0      |  
-        #            |0       lam2*p2  0        0      | = P 
-        #            |0       0        lam3*p3  0      |
-        #            |0       0        0        lam4*p4|
-        #            -----------------------------------
-        # where P is a a matrix according to the specified penalty. The matrix P.T @ V @ P is then used, where
-        # V is a diagonal matrix of 0s and 1s, where a 1 is placed if the constraint is violated. 
-        # TODO:
-        #    [x]  include the weights !!! 
-        #    [x]  include TPS smoothnes penalty
-        #    [ ]  include TPS shape penalty
+        #  Looks like: ----------------------------------- 
+        #             |lam1*p1 0        0        0      |  
+        #             |0       lam2*p2  0        0      | = P 
+        #             |0       0        lam3*p3  0      |
+        #             |0       0        0        lam4*p4|
+        #             -----------------------------------
+        #  where P is a a matrix according to the specified penalty. The matrix P.T @ V @ P is then used, where
+        #  V is a diagonal matrix of 0s and 1s, where a 1 is placed if the constraint is violated. 
+        #  TODO:
+        #     [x]  include the weights !!! 
+        #     [x]  include TPS smoothnes penalty
+        #     [ ]  include TPS shape penalty
         
         assert (self.smooths is not None), "Run Model.create_basis() first!"
         assert (beta_test is not None), "Include beta_test!"
@@ -158,7 +159,7 @@ class StarModel(BaseEstimator):
             P = smooth.penalty_matrix
             V = check_constraint(beta=b, constraint=smooth.constraint)
             self.constraint_penalty_list.append(smooth.lam["constraint"] * P.T @ V @ P )
-        # self.constraint_penalty_matrix is already lambda P.T @ V @ P.T
+        #  self.constraint_penalty_matrix is already lambda P.T @ V @ P.T
         self.constraint_penalty_matrix = block_diag(*self.constraint_penalty_list)
 
     def create_basis_for_prediction(self, X=None):
@@ -262,9 +263,9 @@ class StarModel(BaseEstimator):
             Returns the fitted model.
 
         """
-        # TODO:
-        #    [x] check constraint violation in the iterative fit
-        #    [x] incorporate TPS in the iterative fit
+        #  TODO:
+        #     [x] check constraint violation in the iterative fit
+        #     [x] incorporate TPS in the iterative fit
                 
         X, y = check_X_y(X, y.ravel())
         self = self.calc_LS_fit(X=X, y=y)
@@ -281,9 +282,8 @@ class StarModel(BaseEstimator):
             v_new = check_constraint_full_model(model=self)
             df = df.append(pd.DataFrame(data=beta_new.reshape(1,-1), columns=df.columns))
             delta_v = np.sum(v_new - v_old)
-            #print("Delta v: ", delta_v)
-            # change the criteria to the following: 
-            #print("Differences at the following coefficients: ", np.argwhere(v_old != v_new))
+            #  change the criteria to the following: 
+            #  print("Differences at the following coefficients: ", np.argwhere(v_old != v_new))
             if delta_v == 0: 
                 break
 
@@ -312,11 +312,11 @@ class StarModel(BaseEstimator):
         fig : plotly.graph_objs.Figure
 
         """
-        # smoothness part of the cost function
+        #  smoothness part of the cost function
         P = PenaltyMatrix()
         S = P.smoothness_matrix(n_param=self.smooths[0].n_param)
-        lam_s = self.description_dict["s(1)"]["lam"]["smoothness"]
-        lam_c = self.description_dict["s(1)"]["lam"]["constraint"]
+        #  lam_s = self.description_dict["s(1)"]["lam"]["smoothness"]
+        #  lam_c = self.description_dict["s(1)"]["lam"]["constraint"]
         J = self.coef_.T @ S.T @ S @ self.coef_
         P = self.smooths[0].penalty_matrix
         J_constr = self.coef_.T @ P.T @ np.diag(check_constraint_full_model(model=self)) @ P @ self.coef_
@@ -332,14 +332,12 @@ class StarModel(BaseEstimator):
         fig2 = go.Figure(data=[go.Pie(labels=["Data", "Smoothness", "Constraint"], values=[D_pre, J_pre, J_constr_pre])])
         fig2.update_layout(title="Cost function partition")
 
-
         if print_:
             print("Values without lambdas: ")
             print("J(beta) = ", J)
             print("J_constr(beta) = ", J_constr)
             print("D(beta) = ", D)
         
-
             print("Values without lambdas and LS fit: ")
             print("J_pre(beta) = ", J_pre)
             print("J_constr_pre(beta) = ", J_constr_pre)
@@ -403,13 +401,15 @@ class StarModel(BaseEstimator):
         )
         return fig       
 
-    def predict(self, X):
+    def predict(self, X_pred):
         """Prediction of the trained model on the data in X.
         
+        Currently only 1-DIMENSIONAL prediction possible !!!
+
         Parameters
         ----------
-        X : np.ndarray
-            Data to predict values for.
+        X_pred : np.ndarray
+            Data of shape (n_samples,) to predict values for.
         
         Returns
         -------
@@ -417,12 +417,18 @@ class StarModel(BaseEstimator):
             Returns the predicted values. 
  
         """
- 
-        assert (False), "--- This function is not finished !!! ---"
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
 
-        self.create_basis_for_prediction(X=X)
-        return self.basis_for_prediction @ self.coef_
+
+        #  y_pred = np.zeros((len(self.smooths), X_pred.shape[0]))
+        #  for i, sp in enumerate(X_pred):
+        #      for i2, (x_i, s) in enumerate(zip(sp, self.smooths)):
+        #          y_pred[i2, i] = s.spp(sp=x_i, coef_=self.coef_[self.coef_list[i2]:self.coef_list[i2+1]])
+        #  y_pred = y_pred.sum(axis=0)
+        
+        y_pred = np.array([self.smooths[0].spp(sp=i, coef_=self.coef_) for i in X_pred])
+        return y_pred
+
         
     def calc_hat_matrix(self):
         """Calculates the hat matrix (influence matrix) of the fitted model.
@@ -537,15 +543,14 @@ class StarModel(BaseEstimator):
                 for k2 in self.description_dict.keys():
                     if k[:k.find("_")] == k2:
                         self.description_dict[k2]["lam"][k[k.find("_")+1:]] = v
-            #print("\n Parameters: ", params)
             self.fit(X=X, y=y.ravel(), plot_=plot_)
             if plot_:
                 print(f"Parameters: {params}")
 
             ccfm = check_constraint_full_model(model=self)
             gcv_new = self.calc_GCV_score(y=y)          
-            # add a penalty for violating constraints like gcv = gcv(1+penalty), where
-            # penalty < 1
+            #  add a penalty for violating constraints like gcv = gcv(1+penalty), where
+            #  penalty < 1
             gcv_new = gcv_new * (1 + np.sum(ccfm) / len(self.coef_))
             gcv_scores.append(gcv_new)
             violated_constraints_list.append(ccfm)

@@ -113,7 +113,7 @@ class PenaltyMatrix():
         assert (n_param != 0), "Include n_param!!!"
            
         # find the peak index
-        peak, properties = find_peaks(x=y_data, distance=int(len(y_data)))
+        peak, _ = find_peaks(x=y_data, distance=int(len(y_data)))
         # find idx of affected splines
         border = np.argwhere(basis[peak,:] > 0)
         left_border_spline_idx = int(border[0][1])
@@ -157,7 +157,7 @@ class PenaltyMatrix():
         assert (n_param != 0), "Include n_param!!!"
 
         # find the valley index
-        valley, properties = find_peaks(x=-y_data, distance=int(len(y_data)))
+        valley, _ = find_peaks(x=-1*y_data, distance=int(len(y_data)))
         # find idx of affected splines
         border = np.argwhere(basis[valley,:] > 0)
         left_border_spline_idx = int(border[0][1])
