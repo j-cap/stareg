@@ -44,6 +44,11 @@ class TestBspline(unittest.TestCase):
         self.assertTrue(((self.BS.basis > 0).sum(axis=1)[1:-1] == 4).all())
         self.BS.bspline_basis(x_data=self.x, k=self.k, m=self.m, type_="quantile")
         self.assertTrue(((self.BS.basis > 0).sum(axis=1)[1:-1] == 4).all())
+
+    def test_bspline_spp(self):
+        self.BS.bspline_basis(x_data=self.x, k=self.k, m=2, type_="quantile")
+        y_pred = self.BS.spp(sp=0.5, coef_=np.ones(self.k))
+        self.assertAlmostEqual(float(y_pred), 1)
         
 
 if __name__ == "__main__":

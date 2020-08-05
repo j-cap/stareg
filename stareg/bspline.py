@@ -26,7 +26,7 @@ class Bspline(PenaltyMatrix):
         if order == "cubic":
             self.m = 2
 
-    def bspline(self, k, i, m=2):
+    def bspline(self, x, knots, i, m=2):
         """Compute the i-th b-spline basis function of order m at the values given in x.
         
         Note
@@ -35,6 +35,8 @@ class Bspline(PenaltyMatrix):
         
         Parameters
         ----------
+        x : array
+            Data to calculate the spline values for.
         k : array
             Array of knot locations.
         i : int
@@ -45,12 +47,12 @@ class Bspline(PenaltyMatrix):
         """
         if m==-1:
             # return 1 if x is in {k[i], k[i+1]}, otherwise 0
-            return (self.x >= k[i]) & (self.x < k[i+1]).astype(int)
+            return (x >= knots[i]) & (x < knots[i+1]).astype(int)
         else:
             #print("m = ", m, "\t i = ", i)
-            z0 = (self.x - k[i]) / (k[i+m+1] - k[i])
-            z1 = (k[i+m+2] - self.x) / (k[i+m+2] - k[i+1])
-            return z0*self.bspline(k, i, m-1) + z1*self.bspline(k, i+1, m-1)
+            z0 = (x - knots[i]) / (knots[i+m+1] - knots[i])
+            z1 = (knots[i+m+2] - x) / (knots[i+m+2] - knots[i+1])
+            return z0*self.bspline(x, knots, i, m-1) + z1*self.bspline(x, knots, i+1, m-1)
                 
     def bspline_basis(self, x_data=None, k=10, m=2, type_="quantile"):
         """Set up model matrix for the B-spline basis.
@@ -75,22 +77,17 @@ class Bspline(PenaltyMatrix):
 
         if not hasattr(self, 'm'):
             self.m = m
-        if isinstance(x_data, np.ndarray):
-            self.x = x_data
-        else:
-            print(f"Datatype for 'x':{type(x_data)} not supported!")
-            return
-        self.x.sort()
-        x = self.x
-        assert (type(x) is np.ndarray), "Type of x is not ndarray!"
-        n = len(x) # n = number of data
+        
+        assert (type(x_data) is np.ndarray), "Type of x is not ndarray!"
+        x_data.sort()
+        n = len(x_data) # n = number of data
         X = np.zeros((n, k))
         
-        xmin, xmax = np.min(x), np.max(x)
+        xmin, xmax = np.min(x_data), np.max(x_data)
         if type_ == "quantile":
-            xk = np.quantile(a=x, q=np.linspace(0,1,k - m))
+            xk = np.quantile(a=x_data, q=np.linspace(0,1,k - m))
         elif type_ == "equidistant":
-            xk = np.linspace(x.min(), x.max(), k-m)
+            xk = np.linspace(xmin, xmax, k-m)
         else:
             print("Knot placement type is not supported!!!")
             print("Either 'quantile' or 'equidistant'!")
@@ -100,10 +97,12 @@ class Bspline(PenaltyMatrix):
         xk = np.append(xk, np.linspace(xmax+dx, xmax+(m+1)*dx, 3, endpoint=False))
         
         for i in range(k):
-            X[:,i] = self.bspline(k=xk, i=i, m=m)
+            X[:,i] = self.bspline(x=x_data, knots=xk, i=i, m=m)
             
+        self.x = x_data
         self.basis = X
         self.knots = xk
+        
         self.knot_type = type_
         self.n_param = int(X.shape[1])
     
@@ -120,9 +119,7 @@ class Bspline(PenaltyMatrix):
         # TODO:
         # - [ ] rework this function
         
-        if self.basis is None or self.knots is None:
-            k = 10
-            self.bspline_basis(k=k, m=self.m)
+        assert (self.basis is not None), "Run .bspline_basis() first!"
 
         fig = go.Figure()
         for i in range(self.basis.shape[1]):
@@ -135,4 +132,40 @@ class Bspline(PenaltyMatrix):
         else:
             fig.update_layout(title="B-Spline basis")
         return fig
+
+    def spp(self, sp=0, coef_=None):
+        """Calculate the single point prediction for B-splines given the coefficients. 
+        
+        Parameters:
+        -----------
+        sp : float
+            Single point to calculate the prediction for.
+        coef_ : np.array
+            Calculated coefficients for the B-splines.
+            
+        Returns:
+        --------
+        p : np.float
+            Predicted value. 
+            
+        """
+        knots = self.knots
+        idx = np.argwhere(knots >= sp)[0][0]
+        s = []
+        if  len(knots)-4 > idx >=4:
+            # interior knots
+            [s.append(self.bspline(x=sp, knots=knots[idx-4:], i=i, m=2)) for i in range(4)]
+        elif idx < 4:
+            # left boundary knots
+            [s.append(self.bspline(x=sp, knots=knots[idx-3:], i=i, m=2)) for i in range(3)]
+            s.append(0.)
+            idx += 1
+        elif idx >= len(knots)-4:
+            # right boundary knots
+            s.append(0.)
+            [s.append(self.bspline(x=sp, knots=knots[idx-3:], i=i, m=2)) for i in range(3)]
+        p = np.sum(np.array(s) * coef_[idx-4:idx])   
+        return p
+
+
                     
