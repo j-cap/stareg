@@ -94,7 +94,7 @@ class Bspline(PenaltyMatrix):
 
         dx = np.min(np.diff(xk))
         xk = np.insert(xk, 0, np.linspace(xmin-(m+1)*dx, xmin, 3, endpoint=False))
-        xk = np.append(xk, np.linspace(xmax+dx, xmax+(m+1)*dx, 3, endpoint=False))
+        xk = np.append(xk, np.linspace(xmax+dx, xmax+(m+1)*dx, 3, endpoint=True))
         
         for i in range(k):
             X[:,i] = self.bspline(x=x_data, knots=xk, i=i, m=m)
@@ -136,15 +136,15 @@ class Bspline(PenaltyMatrix):
     def spp(self, sp=0, coef_=None):
         """Calculate the single point prediction for B-splines given the coefficients. 
         
-        Parameters:
-        -----------
+        Parameters
+        ----------
         sp : float
             Single point to calculate the prediction for.
         coef_ : np.array
             Calculated coefficients for the B-splines.
             
-        Returns:
-        --------
+        Returns
+        -------
         p : np.float
             Predicted value. 
             
@@ -152,20 +152,79 @@ class Bspline(PenaltyMatrix):
         knots = self.knots
         idx = np.argwhere(knots >= sp)[0][0]
         s = []
-        if  len(knots)-4 > idx >=4:
+        
+        if  len(knots)-4 > idx >= 4:
             # interior knots
             [s.append(self.bspline(x=sp, knots=knots[idx-4:], i=i, m=2)) for i in range(4)]
         elif idx < 4:
             # left boundary knots
-            [s.append(self.bspline(x=sp, knots=knots[idx-3:], i=i, m=2)) for i in range(3)]
-            s.append(0.)
+            [s.append(self.bspline(x=sp, knots=knots, i=i, m=2)) for i in range(4)]
             idx += 1
         elif idx >= len(knots)-4:
             # right boundary knots
-            s.append(0.)
-            [s.append(self.bspline(x=sp, knots=knots[idx-3:], i=i, m=2)) for i in range(3)]
+            #s.append(0.)
+            [s.append(self.bspline(x=sp, knots=knots[idx-4:], i=i, m=2)) for i in range(4)]
         p = np.sum(np.array(s) * coef_[idx-4:idx])   
         return p
+
+    def right_exterior_spp(self, sp=1.1, coef_=None, width=5):
+        """SPP for extrapolation towards zero on the right side.
+        
+        Parameters
+        ----------
+        sp : float
+            Single point data.
+        coef_ : np.array
+            Coefficients of the fitted model.
+            
+        Returns
+        -------
+        p : float
+            Predicted value.
+            
+        """
+        
+        #  generate the Bspline basis for the extrapolation area
+        n_splines = 25
+        x_exp = np.linspace(1, 1.5, 100)
+        B = Bspline()
+        B.bspline_basis(x_data=x_exp, k=n_splines, type_="equidistant")
+        #  calculate the coefficients for the Bspline basis
+        coef_lin = np.linspace(0,1, n_splines)
+        coef = np.exp(-coef_lin**2 / (1/width)) * np.mean(coef_[-3:])
+        #  calculate the extrapolation point    
+        return B.spp(sp=sp, coef_=coef)
+
+    def left_exterior_spp(self, sp=-0.1, coef_=None, width=5):
+        """SPP for extrapolation towards zero on the left side.
+        
+        Parameter
+        ---------
+        sp : float
+            Single point data.
+        coef_ : np.array
+            Coefficients of the fitted model.
+            
+        Returns
+        -------
+        p : float
+            Predicted value.
+            
+        """
+
+        #  generate the Bspline basis for the extrapolation area
+        n_splines = 25
+        x_exp = np.linspace(-0.5, 0, 100)
+        B = Bspline()
+        B.bspline_basis(x_data=x_exp, k=n_splines, type_="equidistant")
+        #  calculate the coeffficients for the Bspline basis
+        coef_lin = np.linspace(0,1, n_splines)
+        coef = np.exp(-coef_lin[::-1]**2 / (1/width)) * np.mean(coef_[:3])
+        #  calculate the extrapolation point
+        return B.spp(sp=sp, coef_=coef)
+
+
+
 
 
                     

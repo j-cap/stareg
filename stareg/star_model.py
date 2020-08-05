@@ -428,7 +428,7 @@ class StarModel(BaseEstimator):
         )
         return fig       
 
-    def predict(self, X_pred):
+    def predict(self, X_pred, extrapol_type="zero", depth=3):
         """Prediction of the trained model on the data in X.
         
         Currently only 1-DIMENSIONAL prediction possible !!!
@@ -437,7 +437,11 @@ class StarModel(BaseEstimator):
         ----------
         X_pred : np.ndarray
             Data of shape (n_samples,) to predict values for.
-        
+        extrapol_type: str
+            Indiactor of the extrapolation type. 
+        depth : int
+            Indicates how many coefficients are used for the linear extrapolation.
+
         Returns
         -------
         pred : array
@@ -451,9 +455,16 @@ class StarModel(BaseEstimator):
         #      for i2, (x_i, s) in enumerate(zip(sp, self.smooths)):
         #          y_pred[i2, i] = s.spp(sp=x_i, coef_=self.coef_[self.coef_list[i2]:self.coef_list[i2+1]])
         #  y_pred = y_pred.sum(axis=0)
-        
-        y_pred = np.array([self.smooths[0].spp(sp=i, coef_=self.coef_) for i in X_pred])
-        return y_pred
+        y_pred = []
+        for x in X_pred:
+            if 0 <= x <= 1:
+                #print("inside prediction")
+                y_pred.append(self.smooths[0].spp(sp=x, coef_=self.coef_))
+            else:
+                #print("extrapolation area with type = ", extrapol_type)
+                y_pred.append(self.extrapolate(x_exp=x, type_=extrapol_type, depth=3))
+        y_pred = np.array([y_pred])
+        return y_pred.ravel()
 
     def predict_single_point(self, x_sp):
         """Fast single point prediction.
@@ -471,9 +482,46 @@ class StarModel(BaseEstimator):
             Predicted value.
 
         """
+
         return self.smooths[0].spp(sp=x_sp, coef_=self.coef_)
 
-        
+
+    def extrapolate(self, x_exp, type_="constant", depth=5):
+        """
+        Type is either "constant", "linear", "zero"
+
+        depth: how many coefficients are taken into account for the linear extrapolation
+
+        """
+        assert (type_ in ["constant", "linear", "zero"]), f"Typ_ '{type_}' not supported!"
+        direction = "left" if x_exp < 0 else "right"
+        if direction == "left" and type_ in ["constant", "linear"]:
+            #print("left + const/lin")
+            y_boundary = self.predict_single_point(x_sp=0)
+            k = np.mean(self.coef_[:depth])
+        elif direction == "right" and type_ in ["constant", "linear"]:
+            #print("right + const/lin")
+            y_boundary = self.predict_single_point(x_sp=1)
+            k = np.mean(self.coef_[-depth:])
+
+        if type_ == "constant":
+            #print("const")
+            y_extrapolate = y_boundary
+        elif type_ == "linear":
+            #print("linear")
+            dx = x_exp-1 if x_exp > 0 else np.abs(x_exp)
+            y_extrapolate = y_boundary + dx * k
+        elif type_ == "zero" and direction == "left":
+            #print("left + zero")
+            y_extrapolate = self.smooths[0].left_exterior_spp(sp=x_exp, coef_=self.coef_, width=depth)
+        elif type_ == "zero" and direction == "right":
+            #print("right + zero")
+            y_extrapolate = self.smooths[0].right_exterior_spp(sp=x_exp, coef_=self.coef_, width=depth)
+        else:
+            return
+
+        return y_extrapolate
+
     def calc_hat_matrix(self):
         """Calculates the hat matrix (influence matrix) of the fitted model.
         

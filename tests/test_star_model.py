@@ -9,8 +9,6 @@ import numpy as np
 class TestStarModel(unittest.TestCase):
 
     def setUp(self):
-
-
         self.x = np.linspace(0,1,100).reshape(100, 1)
         self.y = np.exp(-(self.x - 0.4)**2 / 0.01)
         self.n_params = 25
@@ -110,7 +108,6 @@ class TestStarModel(unittest.TestCase):
         y_pred = M.predict(X_pred=x_pred)
         self.assertEqual(type(y_pred), np.ndarray)
         self.assertEqual(y_pred.shape[0], x_pred.shape[0])
-
 
     def test_starmodel_calc_hat_matrix(self):
         self.M.fit(X=self.x, y=self.y, plot_=False)
