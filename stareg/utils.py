@@ -37,8 +37,12 @@ def check_constraint(beta, constraint):
         v = list(np.ones(len(b_diff_diff), dtype=np.int)) #+ [0,0]
     elif constraint == "peak":
         v = check_peak_constraint(beta=beta)
+    elif constraint == "multi-peak":
+        v = check_multi_peak_constraint(beta=beta)
     elif constraint == "valley":
         v = check_valley_constraint(beta=beta)
+    elif constraint == "multi-valley":
+        v = check_multi_valley_constraint(beta=beta)
     return np.diag(v)
 
 def check_valley_constraint(beta):
@@ -62,6 +66,17 @@ def check_valley_constraint(beta):
     v = np.array(left+right+[False])
     return v.astype(np.int)
 
+def check_multi_valley_constraint(beta):
+    """Check whether beta contains 2 peaks and is increasing to the first,
+    then decreasing, then again increasing and then again decreasing
+    """
+
+    peaks, properties = find_peaks(x=-beta, prominence=beta.max()/5, distance=int(len(beta)/10))
+    middle_spline = int(np.mean(peaks))
+    v1 = check_valley_constraint(beta=beta[:middle_spline])
+    v2 = check_valley_constraint(beta=beta[middle_spline:])
+    v = np.array(list(v1)+list(v2)+[False])
+    return v.astype(np.int)
 
 def check_peak_constraint(beta):
     """Calculate the weight vector v for peak constraint.
@@ -83,6 +98,19 @@ def check_peak_constraint(beta):
     right = list(np.diff(beta[idx:]) > 0)
     v = np.array(left+right+[False])
     return v.astype(np.int)
+
+def check_multi_peak_constraint(beta):
+    """Check whether beta contains 2 peaks and is increasing to the first,
+    then decreasing, then again increasing and then again decreasing
+    """
+
+    peaks, properties = find_peaks(x=beta, prominence=beta.max()/5, distance=int(len(beta)/10))
+    middle_spline = int(np.mean(peaks))
+    v1 = check_peak_constraint(beta=beta[:middle_spline])
+    v2 = check_peak_constraint(beta=beta[middle_spline:])
+    v = np.array(list(v1)+list(v2)+[False])
+    return v.astype(np.int)
+
 
 def check_constraint_full_model(model):
     """Checks if the coefficients in the model violate the given constraints for the whole model.

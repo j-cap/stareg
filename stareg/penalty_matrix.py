@@ -162,3 +162,36 @@ class PenaltyMatrix():
         valley[valley_idx, valley_idx] = 0
         return valley
         
+    def multi_peak_matrix(self, n_param=0, y_data=None, basis=None):
+        """Find 2 peaks in the data and generate the penalty amtrix """
+
+        peaks, properties = find_peaks(x=y_data, prominence=y_data.max()/5, distance=int(len(y_data)/10))
+
+        peak_1 = np.argwhere(basis[peaks[0], :] > 0)[1][0]
+        peak_2 = np.argwhere(basis[peaks[1], :] > 0)[1][0]
+        middle_spline = int(np.mean([peak_1, peak_2]))
+
+        inc_1 = self.d1_difference_matrix(n_param=peak_1)
+        dec_1 = -1*self.d1_difference_matrix(n_param=middle_spline-peak_1)
+        inc_2 = self.d1_difference_matrix(n_param=peak_2-middle_spline)
+        dec_2 = -1*self.d1_difference_matrix(n_param=n_param - peak_2)
+
+        peak = block_diag(inc_1[:,:-1], [0], dec_1[:,:-1], [0], inc_2[:,:-1], [0], dec_2)
+        return peak
+
+    def multi_valley_matrix(self, n_param=0, y_data=None, basis=None):
+        """Find 2 valleys in the data and generate the penalty amtrix """
+
+        valleys, properties = find_peaks(x=-1*y_data, prominence=y_data.max()/5, distance=int(len(y_data)/10))
+
+        valley_1 = np.argwhere(basis[valleys[0], :] > 0)[1][0]
+        valley_2 = np.argwhere(basis[valleys[1], :] > 0)[1][0]
+        middle_spline = int(np.mean([valley_1, valley_2]))
+
+        dec_1 = -1*self.d1_difference_matrix(n_param=valley_1)
+        inc_1 = self.d1_difference_matrix(n_param=middle_spline-valley_1)
+        dec_2 = -1*self.d1_difference_matrix(n_param=valley_2-middle_spline)
+        inc_2 = self.d1_difference_matrix(n_param=n_param - valley_2)
+
+        valley = block_diag(dec_1[:,:-1], [0], inc_1[:,:-1], [0], dec_2[:,:-1], [0], inc_2)
+        return valley
