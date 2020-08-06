@@ -112,19 +112,14 @@ class PenaltyMatrix():
         assert (basis is not None), "Include basis!"
         assert (n_param != 0), "Include n_param!!!"
            
-        # find the peak index
         peak, _ = find_peaks(x=y_data, distance=int(len(y_data)))
-        # find idx of affected splines
         border = np.argwhere(basis[peak,:] > 0)
-        left_border_spline_idx = int(border[0][1])
-        right_border_spline_idx = int(border[-1][1])
-        # create inc, zero and dec penalty matrices for the corresponding ares
-        inc_matrix = self.d1_difference_matrix(n_param=left_border_spline_idx)
-        plateu_matrix = np.zeros((len(border), len(border)), dtype=np.int)
-        dec_matrix = -1 * self.d1_difference_matrix(n_param= n_param - right_border_spline_idx)
+        peak_idx = border[-3][1]
+        inc_matrix = self.d1_difference_matrix(n_param=peak_idx+2)
+        dec_matrix = -1 * self.d1_difference_matrix(n_param= n_param - peak_idx-1)
+        peak = block_diag(inc_matrix[:,:-1],  dec_matrix)
+        peak[peak_idx, peak_idx] = 0
 
-        peak = block_diag(*[inc_matrix[:,:-1], plateu_matrix, dec_matrix])
-        peak[left_border_spline_idx-2, left_border_spline_idx-1] = 1
         return peak
         
     def valley_matrix(self, n_param=0, y_data=None, basis=None):
@@ -156,17 +151,14 @@ class PenaltyMatrix():
         assert (basis is not None), "Include basis!"
         assert (n_param != 0), "Include n_param!!!"
 
-        # find the valley index
+        # here are some coments
+        #with are pretty useless
         valley, _ = find_peaks(x=-1*y_data, distance=int(len(y_data)))
-        # find idx of affected splines
         border = np.argwhere(basis[valley,:] > 0)
-        left_border_spline_idx = int(border[0][1])
-        right_border_spline_idx = int(border[-1][1])
-        # create dec, zero and inc penalty matrices for the corresponding ares
-        inc_matrix = -1* self.d1_difference_matrix(n_param=left_border_spline_idx)
-        plateu_matrix = np.zeros((len(border), len(border)), dtype=np.int)
-        dec_matrix = self.d1_difference_matrix(n_param= n_param - right_border_spline_idx)
-        valley = block_diag(*[inc_matrix[:,:-1], plateu_matrix, dec_matrix])
-        valley[left_border_spline_idx-2, left_border_spline_idx-1] = -1
+        valley_idx = border[-3][1]
+        dec_matrix = self.d1_difference_matrix(n_param=valley_idx+2)
+        inc_matrix = -1 * self.d1_difference_matrix(n_param= n_param - valley_idx-1)
+        valley = block_diag(inc_matrix[:,:-1],  dec_matrix)
+        valley[valley_idx, valley_idx] = 0
         return valley
         
