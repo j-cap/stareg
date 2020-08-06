@@ -43,6 +43,8 @@ def check_constraint(beta, constraint):
         v = check_valley_constraint(beta=beta)
     elif constraint == "multi-valley":
         v = check_multi_valley_constraint(beta=beta)
+    elif constraint == "peak-and-valley":
+        v = check_peak_and_valley_constraint(beta=beta)
     return np.diag(v)
 
 def check_valley_constraint(beta):
@@ -108,6 +110,21 @@ def check_multi_peak_constraint(beta):
     middle_spline = int(np.mean(peaks))
     v1 = check_peak_constraint(beta=beta[:middle_spline])
     v2 = check_peak_constraint(beta=beta[middle_spline:])
+    v = np.array(list(v1)+list(v2)+[False])
+    return v.astype(np.int)
+
+def check_peak_and_valley_constraint(beta):
+    """ Check whether beta contains a peak and a valley """
+    peak, _ = find_peaks(x=beta, distance=len(beta))
+    valley, _ = find_peaks(x=-beta, distance=len(beta))
+    middle_spline = int(np.mean([peak, valley]))
+
+    if peak > valley:
+        v1 = check_valley_constraint(beta=beta[:middle_spline])
+        v2 = check_peak_constraint(beta=beta[middle_spline:])
+    elif peak < valley:
+        v1 = check_peak_constraint(beta=beta[:middle_spline])
+        v2 = check_valley_constraint(beta=beta[middle_spline:])
     v = np.array(list(v1)+list(v2)+[False])
     return v.astype(np.int)
 

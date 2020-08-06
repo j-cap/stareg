@@ -80,6 +80,11 @@ class Smooths(Bspline):
             self.penalty_matrix = self.multi_valley_matrix(
                 n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
             )
+        elif constraint == "peak-and-valley":
+            assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
+            self.penalty_matrix = self.peak_and_valley_matrix(
+                n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
+            )
         else:
             print(f"Penalty {constraint} not implemented!")
 

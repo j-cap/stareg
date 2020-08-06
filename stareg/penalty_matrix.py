@@ -195,3 +195,28 @@ class PenaltyMatrix():
 
         valley = block_diag(dec_1[:,:-1], [0], inc_1[:,:-1], [0], dec_2[:,:-1], [0], inc_2)
         return valley
+
+    def peak_and_valley_matrix(self, n_param=0, y_data=None, basis=None):
+        """ penalty matrix for one peak and one valley """
+        peak, _ = find_peaks(x=y_data, distance=len(y_data))
+        valley, _ = find_peaks(x=-y_data, distance=len(y_data))
+
+        peak = np.argwhere(basis[peak[0], :] > 0)[2][0]
+        valley = np.argwhere(basis[valley[0], :] > 0)[2][0]
+        middle_spline = int(np.mean([peak, valley]))
+
+        if peak < valley:
+            inc_1 = self.d1_difference_matrix(n_param=peak)
+            dec_1 = -1*self.d1_difference_matrix(n_param=middle_spline-peak)
+            dec_2 = -1*self.d1_difference_matrix(n_param=valley-middle_spline)
+            inc_2 = self.d1_difference_matrix(n_param=n_param-valley)
+            M = block_diag(inc_1[:,:-1], [0], dec_1[:,:-1], [0], dec_2[:,:-1], [0], inc_2)
+        elif peak > valley:
+            dec_1 = -1*self.d1_difference_matrix(n_param=valley)
+            inc_1 = self.d1_difference_matrix(n_param=middle_spline-valley)
+            inc_2 = self.d1_difference_matrix(n_param=peak-middle_spline)
+            dec_2 = -1*self.d1_difference_matrix(n_param=n_param-peak)
+            M = block_diag(dec_1[:,:-1], [0], inc_1[:,:-1], [0], inc_2[:,:-1], [0], dec_2)
+        return M
+
+
