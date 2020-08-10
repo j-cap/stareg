@@ -73,8 +73,8 @@ def check_multi_valley_constraint(beta):
     then decreasing, then again increasing and then again decreasing
     """
 
-    peaks, properties = find_peaks(x=-beta, prominence=beta.max()/5, distance=int(len(beta)/10))
-    middle_spline = int(np.mean(peaks))
+    valleys, _ = find_peaks(x=-1*beta, prominence=np.std(beta), distance=int(len(beta)/3))
+    middle_spline = int(np.mean(valleys))
     v1 = check_valley_constraint(beta=beta[:middle_spline])
     v2 = check_valley_constraint(beta=beta[middle_spline:])
     v = np.array(list(v1)+list(v2)+[False])
@@ -106,7 +106,7 @@ def check_multi_peak_constraint(beta):
     then decreasing, then again increasing and then again decreasing
     """
 
-    peaks, properties = find_peaks(x=beta, prominence=beta.max()/5, distance=int(len(beta)/10))
+    peaks, _ = find_peaks(x=beta, prominence=np.std(beta), distance=int(len(beta)/3))
     middle_spline = int(np.mean(peaks))
     v1 = check_peak_constraint(beta=beta[:middle_spline])
     v2 = check_peak_constraint(beta=beta[middle_spline:])

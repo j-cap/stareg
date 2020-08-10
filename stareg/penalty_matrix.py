@@ -156,50 +156,99 @@ class PenaltyMatrix():
         valley, _ = find_peaks(x=-1*y_data, distance=int(len(y_data)))
         border = np.argwhere(basis[valley,:] > 0)
         valley_idx = border[-3][1]
-        dec_matrix = self.d1_difference_matrix(n_param=valley_idx+2)
-        inc_matrix = -1 * self.d1_difference_matrix(n_param= n_param - valley_idx-1)
-        valley = block_diag(inc_matrix[:,:-1],  dec_matrix)
+        dec_matrix = -1*self.d1_difference_matrix(n_param=valley_idx+2)
+        inc_matrix = self.d1_difference_matrix(n_param= n_param - valley_idx-1)
+        valley = block_diag(dec_matrix[:,:-1],  inc_matrix)
         valley[valley_idx, valley_idx] = 0
         return valley
         
     def multi_peak_matrix(self, n_param=0, y_data=None, basis=None):
-        """Find 2 peaks in the data and generate the penalty amtrix """
+        """Find 2 peaks in the data and generate the penalty matrix.
+        
+        Parameters
+        ----------
+        n_param : int
+            Dimension of the multi-peak constraint matrix.
+        y_data : array
+            Array of data to find the multi-peak locations.
+        basis : np.ndarray
+            BSpline basis for the X data.
+            
+        Returns
+        -------
+        P : np.ndarray
+            Multi-Peak constraint matrix of size (n_param-1 x n_param)
 
-        peaks, properties = find_peaks(x=y_data, prominence=y_data.max()/5, distance=int(len(y_data)/10))
+        """
+        assert (y_data is not None), "Include real y_data!!!"
+        assert (basis is not None), "Include basis!"
+        assert (n_param != 0), "Include n_param!!!"
+        peaks, _ = find_peaks(x=y_data, prominence=np.std(y_data), distance=int(len(y_data)/3))
+        assert (len(peaks) == 2), "2 distinct peaks not found!"
+        local_valley, _ = find_peaks(x=-1*y_data[peaks[0]:peaks[1]], distance=int(len(y_data[peaks[0]:peaks[1]])))
+        valley_idx = np.argwhere(basis[peaks[0]+local_valley[0], :] > 0)[1][0]
 
-        peak_1 = np.argwhere(basis[peaks[0], :] > 0)[1][0]
-        peak_2 = np.argwhere(basis[peaks[1], :] > 0)[1][0]
-        middle_spline = int(np.mean([peak_1, peak_2]))
-
-        inc_1 = self.d1_difference_matrix(n_param=peak_1)
-        dec_1 = -1*self.d1_difference_matrix(n_param=middle_spline-peak_1)
-        inc_2 = self.d1_difference_matrix(n_param=peak_2-middle_spline)
-        dec_2 = -1*self.d1_difference_matrix(n_param=n_param - peak_2)
-
-        peak = block_diag(inc_1[:,:-1], [0], dec_1[:,:-1], [0], inc_2[:,:-1], [0], dec_2)
-        return peak
+        P1 = self.peak_matrix(n_param=valley_idx, y_data=y_data[:peaks[0]+local_valley[0]], basis=basis)
+        P2 = self.peak_matrix(n_param=n_param-valley_idx, y_data=y_data[peaks[0]+local_valley[0]:], basis=basis)
+        P = block_diag(P1[:,:-1], 0, P2)
+        P[valley_idx-2, valley_idx-1] = -1
+        return P
 
     def multi_valley_matrix(self, n_param=0, y_data=None, basis=None):
-        """Find 2 valleys in the data and generate the penalty amtrix """
+        """Find 2 valleys in the data and generate the penalty matrix.
+        
+        Parameters
+        ----------
+        n_param : int
+            Dimension of the multi-valley constraint matrix.
+        y_data : array
+            Array of data to find the multi-valley locations.
+        basis : np.ndarray
+            BSpline basis for the X data.
+            
+        Returns
+        -------
+        V : np.ndarray
+            Multi-valley constraint matrix of size (n_param-1 x n_param)
 
-        valleys, properties = find_peaks(x=-1*y_data, prominence=y_data.max()/5, distance=int(len(y_data)/10))
+        """
+        assert (y_data is not None), "Include real y_data!!!"
+        assert (basis is not None), "Include basis!"
+        assert (n_param != 0), "Include n_param!!!"
+        valleys, _ = find_peaks(x=-1*y_data, prominence=np.std(y_data), distance=int(len(y_data)/3))
+        assert (len(valleys) == 2), "2 distinct valleys not found!"
+        local_peak, _ = find_peaks(x=y_data[valleys[0]:valleys[1]], distance=int(len(y_data[valleys[0]:valleys[1]])))
+        peak_idx = np.argwhere(basis[valleys[0]+local_peak[0], :] > 0)[1][0]
 
-        valley_1 = np.argwhere(basis[valleys[0], :] > 0)[1][0]
-        valley_2 = np.argwhere(basis[valleys[1], :] > 0)[1][0]
-        middle_spline = int(np.mean([valley_1, valley_2]))
+        V1 = self.valley_matrix(n_param=peak_idx, y_data=y_data[:valleys[0]+local_peak[0]], basis=basis)
+        V2 = self.valley_matrix(n_param=n_param-peak_idx, y_data=y_data[valleys[0]+local_peak[0]:], basis=basis)
+        V = block_diag(V1[:,:-1], 0, V2)
+        V[peak_idx-2,peak_idx-1] = 1
+        return V
 
-        dec_1 = -1*self.d1_difference_matrix(n_param=valley_1)
-        inc_1 = self.d1_difference_matrix(n_param=middle_spline-valley_1)
-        dec_2 = -1*self.d1_difference_matrix(n_param=valley_2-middle_spline)
-        inc_2 = self.d1_difference_matrix(n_param=n_param - valley_2)
+    def multi_extremum_matrix(self, n_param=0, y_data=None, basis=None):
+        """Find one peak and one valley in the data and generate the penalty matrix.
+        
+        Parameters
+        ----------
+        n_param : int
+            Dimension of the multi-extremum constraint matrix.
+        y_data : array
+            Array of data to find the extremum locations.
+        basis : np.ndarray
+            BSpline basis for the X data.
+            
+        Returns
+        -------
+        mulit_extremum : np.ndarray
+            Multi-extremum constraint matrix of size (n_param-1 x n_param)
 
-        valley = block_diag(dec_1[:,:-1], [0], inc_1[:,:-1], [0], dec_2[:,:-1], [0], inc_2)
-        return valley
-
-    def peak_and_valley_matrix(self, n_param=0, y_data=None, basis=None):
-        """ penalty matrix for one peak and one valley """
+        """        
+        assert (y_data is not None), "Include real y_data!!!"
+        assert (basis is not None), "Include basis!"
+        assert (n_param != 0), "Include n_param!!!"
         peak, _ = find_peaks(x=y_data, distance=len(y_data))
-        valley, _ = find_peaks(x=-y_data, distance=len(y_data))
+        valley, _ = find_peaks(x=-1*y_data, distance=len(y_data))
 
         peak = np.argwhere(basis[peak[0], :] > 0)[2][0]
         valley = np.argwhere(basis[valley[0], :] > 0)[2][0]
@@ -210,13 +259,21 @@ class PenaltyMatrix():
             dec_1 = -1*self.d1_difference_matrix(n_param=middle_spline-peak)
             dec_2 = -1*self.d1_difference_matrix(n_param=valley-middle_spline)
             inc_2 = self.d1_difference_matrix(n_param=n_param-valley)
-            M = block_diag(inc_1[:,:-1], [0], dec_1[:,:-1], [0], dec_2[:,:-1], [0], inc_2)
+            E = block_diag(inc_1[:,:-1], [0], dec_1[:,:-1], [0], dec_2[:,:-1], [0], inc_2)
+            E[valley-2, valley-1] = -1
+            E[middle_spline-2, middle_spline-1] = -1
+            E[peak-2, peak-1] = 1
+            
         elif peak > valley:
             dec_1 = -1*self.d1_difference_matrix(n_param=valley)
             inc_1 = self.d1_difference_matrix(n_param=middle_spline-valley)
             inc_2 = self.d1_difference_matrix(n_param=peak-middle_spline)
             dec_2 = -1*self.d1_difference_matrix(n_param=n_param-peak)
-            M = block_diag(dec_1[:,:-1], [0], inc_1[:,:-1], [0], inc_2[:,:-1], [0], dec_2)
-        return M
+            E = block_diag(dec_1[:,:-1], [0], inc_1[:,:-1], [0], inc_2[:,:-1], [0], dec_2)
+            E[valley-2, valley-1] = 1
+            E[middle_spline-2, middle_spline-1] = 1
+            E[peak-2, peak-1] = -1
+
+        return E
 
 

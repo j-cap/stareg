@@ -128,13 +128,49 @@ class TestUtils(unittest.TestCase):
         V = check_constraint(beta=beta, constraint="peak")
         self.assertEqual(V.shape, (self.n_param-1, self.n_param-1))
         self.assertTrue(np.array_equal(V, V.astype(bool)))
-
+        self.assertEqual(np.sum(V), 0)
+        
     def test_check_constraint_valley(self):
         # valley sequence
         beta = -1*np.exp(-(np.linspace(0,1, self.n_param) - 0.4)**2 / 0.01)
         V = check_constraint(beta=beta, constraint="valley")
         self.assertEqual(V.shape, (self.n_param-1, self.n_param-1))
         self.assertTrue(np.array_equal(V, V.astype(bool)))
+        self.assertEqual(np.sum(V), 0)
+                
+
+    def test_check_constraint_multi_valley(self):
+        x = np.linspace(0,1,100)
+        beta = -1*np.exp(-(x - 0.3)**2 / 0.01) + -1*np.exp(-(x - 0.8)**2 / 0.01)
+        V = check_constraint(beta=beta, constraint="multi-valley")
+        self.assertEqual(V.shape, (len(self.x)-1, len(self.x)-1))
+        self.assertTrue(np.array_equal(V, V.astype(bool)))
+        self.assertEqual(np.sum(V), 0)
+
+    def test_check_constraint_multi_peak(self):
+        x = np.linspace(0,1,100)
+        beta = np.exp(-(x - 0.3)**2 / 0.01) + np.exp(-(x - 0.8)**2 / 0.01)
+        V = check_constraint(beta=beta, constraint="multi-peak")
+        self.assertEqual(V.shape, (len(self.x)-1, len(self.x)-1))
+        self.assertTrue(np.array_equal(V, V.astype(bool)))
+        self.assertEqual(np.sum(V), 0)
+        
+    def test_check_constraint_peak_and_valley(self):
+        x = np.linspace(0,1,100)
+        beta = -1*np.exp(-(x - 0.3)**2 / 0.01) + np.exp(-(x - 0.8)**2 / 0.01)
+        V = check_constraint(beta=beta, constraint="peak-and-valley")
+        self.assertEqual(V.shape, (len(self.x)-1, len(self.x)-1))
+        self.assertTrue(np.array_equal(V, V.astype(bool)))
+        self.assertEqual(np.sum(V), 0)
+
+
+    def test_check_constraint_valley_and_peak(self):
+        x = np.linspace(0,1,100)
+        beta = np.exp(-(x - 0.3)**2 / 0.01) + -1*np.exp(-(x - 0.8)**2 / 0.01)
+        V = check_constraint(beta=beta, constraint="peak-and-valley")
+        self.assertEqual(V.shape, (len(self.x)-1, len(self.x)-1))
+        self.assertTrue(np.array_equal(V, V.astype(bool)))
+        self.assertEqual(np.sum(V), 0)
 
     def test_check_constraint_full_model(self):
         descr = ( ("s(1)", "smooth", self.n_param, (1, 100), "quantile"), )
@@ -142,6 +178,7 @@ class TestUtils(unittest.TestCase):
         M.fit(X=self.x.reshape(-1, 1), y=self.y, plot_=False)
         v = check_constraint_full_model(model=M)
         self.assertEqual(v.sum(), self.n_param-2)
+
 
 
 
