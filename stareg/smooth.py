@@ -51,27 +51,27 @@ class Smooths(Bspline):
         elif constraint == "smooth":
             self.penalty_matrix = self.smoothness_matrix(n_param=self.n_param)
         elif constraint == "peak":
-            assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
+            assert (y_peak_or_valley is not None), self.msg_include_ydata
             self.penalty_matrix = self.peak_matrix(
                 n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
             )
         elif constraint == "valley":
-            assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
+            assert (y_peak_or_valley is not None), self.msg_include_ydata
             self.penalty_matrix = self.valley_matrix(
                 n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
             )
         elif constraint == "multi-peak":
-            assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
+            assert (y_peak_or_valley is not None), self.msg_include_ydata
             self.penalty_matrix = self.multi_peak_matrix(
                 n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
             )
         elif constraint == "multi-valley":
-            assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
+            assert (y_peak_or_valley is not None), self.msg_include_ydata
             self.penalty_matrix = self.multi_valley_matrix(
                 n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
             )
         elif constraint == "peak-and-valley":
-            assert (y_peak_or_valley is not None), "Include real y_data in Smooths()"
+            assert (y_peak_or_valley is not None), self.msg_include_ydata
             self.penalty_matrix = self.multi_extremum_matrix(
                 n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
             )

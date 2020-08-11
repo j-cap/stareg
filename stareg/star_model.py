@@ -10,6 +10,7 @@ import copy
 from numpy.linalg import lstsq
 from scipy.linalg import block_diag
 from scipy.signal import find_peaks
+from scipy.stats import t
 from sklearn.metrics import mean_squared_error
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_X_y 
@@ -18,7 +19,6 @@ from sklearn.model_selection import ParameterGrid
 
 from .smooth import Smooths as s
 from .smooth import TensorProductSmooths as tps
-from .tensorproductspline import TensorProductSpline as t
 from .penalty_matrix import PenaltyMatrix
 from .utils import check_constraint, check_constraint_full_model
 
@@ -274,15 +274,7 @@ class StarModel(BaseEstimator):
         if critical_point is None:
             print("Insert a critical point!")
             return None
-        
-        #x_new = np.append(X, critical_point[0])
-        #x_new.sort()
-        #idx_x_new = np.where(x_new == critical_point[0])[0][0]
-        #y_new = np.insert(arr=y, obj=idx_x_new, values=critical_point[1])
-        #x_new, y_new = x_new.reshape(-1,1), y_new.ravel()
-        # weight matrix creation
         x = X
-        
         w = np.ones(x.shape[0]+len(critical_point))
         for cp in critical_point:
             x = np.append(x, cp[0])
@@ -321,6 +313,38 @@ class StarModel(BaseEstimator):
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self      
     
+    def calc_cov_beta(self, y=None):
+        """Calculate the covariance matrix for the coefficients"""
+        
+        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_cov_beta()!")
+        cov_beta = np.linalg.pinv(self.basis.T @ self.basis) * (1 / (self.basis.shape[0] - self.basis.shape[1])) * np.sum((y - self.basis @ self.coef_)**2)
+
+        return cov_beta
+
+
+    def calc_confidence_intervals(self, alpha=0.05, y=None):
+        """Calculates the lower and upper confidence interval for the fitted coefficients coef_."""
+
+        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_confidence_intervals()!")
+        beta_hat = self.coef_
+        eff_dof = self.basis.shape[0] - self.basis.shape[1]
+        t_np = t.ppf(q=1-alpha/2, df=eff_dof)
+        cov_beta = self.calc_cov_beta(y=y)
+        se_beta = np.sqrt(np.diag(cov_beta))
+
+        beta_lower = beta_hat - t_np * se_beta
+        beta_upper = beta_hat + t_np * se_beta
+        return beta_lower, beta_upper
+
+    def plot_confidence_intervals(self, alpha=0.05, fig=None, y=None, x=None):
+        """Plot the confidence intervals into fig. """
+
+        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using plot_confidence_intervals()!")
+        beta_lower, beta_upper = self.calc_confidence_intervals(alpha=0.05, y=y)
+        fig.add_trace(go.Scatter(x=x.ravel(), y=self.basis @ beta_lower, name="Lower Confidence Interval Bound", mode="lines"))
+        fig.add_trace(go.Scatter(x=x.ravel(), y=self.basis @ beta_upper, name="Upper Confidence Interval Bound", mode="lines"))
+        return fig
+
     def plot_cost_function_partition(self, y, print_=True):
         """Plot the partition of the cost function.
 
@@ -339,6 +363,8 @@ class StarModel(BaseEstimator):
         fig : plotly.graph_objs.Figure
 
         """
+
+        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using plot_cost_function_partition()!")
         #  smoothness part of the cost function
         P = PenaltyMatrix()
         S = P.smoothness_matrix(n_param=self.smooths[0].n_param)
@@ -390,6 +416,7 @@ class StarModel(BaseEstimator):
 
         """
 
+        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using plot_fit()!")
         X, y = check_X_y(X=X, y=y)
         dim = X.shape[1]
         fig = go.Figure()
@@ -448,8 +475,8 @@ class StarModel(BaseEstimator):
             Returns the predicted values. 
  
         """
-        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
 
+        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
         #  y_pred = np.zeros((len(self.smooths), X_pred.shape[0]))
         #  for i, sp in enumerate(X_pred):
         #      for i2, (x_i, s) in enumerate(zip(sp, self.smooths)):
@@ -493,6 +520,7 @@ class StarModel(BaseEstimator):
         depth: how many coefficients are taken into account for the linear extrapolation
 
         """
+        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using extrapolate()!")
         assert (type_ in ["constant", "linear", "zero"]), f"Typ_ '{type_}' not supported!"
         direction = "left" if x_exp < 0 else "right"
         if direction == "left" and type_ in ["constant", "linear"]:

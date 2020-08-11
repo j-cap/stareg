@@ -1,10 +1,11 @@
 
 
 import unittest
+import numpy as np
 from stareg.utils import check_constraint, check_constraint_full_model
 from stareg.utils import check_valley_constraint, check_peak_constraint
 from stareg.star_model import StarModel
-import numpy as np
+
 
 class TestUtils(unittest.TestCase):
 

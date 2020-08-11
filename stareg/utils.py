@@ -26,15 +26,15 @@ def check_constraint(beta, constraint):
     b_diff = np.diff(beta)
     b_diff_diff = np.diff(b_diff)
     if constraint == "inc":
-        v = [0 if i > 0 else 1 for i in b_diff] #+ [0]
+        v = [0 if i > 0 else 1 for i in b_diff] 
     elif constraint == "dec":
-        v = [0 if i < 0 else 1 for i in b_diff] #+ [0]
+        v = [0 if i < 0 else 1 for i in b_diff] 
     elif constraint == "conv":
-        v = [0 if i > 0 else 1 for i in b_diff_diff] #+ [0,0]
+        v = [0 if i > 0 else 1 for i in b_diff_diff] 
     elif constraint == "conc":
-        v = [0 if i < 0 else 1 for i in b_diff_diff] #+ [0,0]
+        v = [0 if i < 0 else 1 for i in b_diff_diff] 
     elif constraint == "smooth":
-        v = list(np.ones(len(b_diff_diff), dtype=np.int)) #+ [0,0]
+        v = list(np.ones(len(b_diff_diff), dtype=np.int))
     elif constraint == "peak":
         v = check_peak_constraint(beta=beta)
     elif constraint == "multi-peak":
