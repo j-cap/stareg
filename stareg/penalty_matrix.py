@@ -267,8 +267,8 @@ class PenaltyMatrix():
         assert (n_param != 0), self.msg_include_nparam
         peak, _ = find_peaks(x=y_data, distance=len(y_data))
         valley, _ = find_peaks(x=-1*y_data, distance=len(y_data))
-        assert (len(peak) == 2), "Peak not found!"
-        assert (len(valley) == 2), "Valley not found!"
+        assert (len(peak) == 1), "Peak not found!"
+        assert (len(valley) == 1), "Valley not found!"
 
         peak = np.argwhere(basis[peak[0], :] > 0)[2][0]
         valley = np.argwhere(basis[valley[0], :] > 0)[2][0]

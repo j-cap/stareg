@@ -313,12 +313,11 @@ class StarModel(BaseEstimator):
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self      
     
-    def calc_cov_beta(self, y=None):
+    def calc_inv_cov_beta(self, y=None):
         """Calculate the covariance matrix for the coefficients"""
         
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_cov_beta()!")
-        cov_beta = np.linalg.pinv(self.basis.T @ self.basis) * (1 / (self.basis.shape[0] - self.basis.shape[1])) * np.sum((y - self.basis @ self.coef_)**2)
-
+        cov_beta = np.linalg.pinv(self.basis.T @ self.basis)
         return cov_beta
 
 
@@ -329,20 +328,52 @@ class StarModel(BaseEstimator):
         beta_hat = self.coef_
         eff_dof = self.basis.shape[0] - self.basis.shape[1]
         t_np = t.ppf(q=1-alpha/2, df=eff_dof)
-        cov_beta = self.calc_cov_beta(y=y)
-        se_beta = np.sqrt(np.diag(cov_beta))
+        inv_cov_beta = self.calc_inv_cov_beta(y=y)
+        se_beta = np.sqrt(np.diag(inv_cov_beta)) * self.mse * (self.basis.shape[0] / eff_dof)
 
         beta_lower = beta_hat - t_np * se_beta
         beta_upper = beta_hat + t_np * se_beta
         return beta_lower, beta_upper
+
+    def calc_single_point_prediction_interval(self, x_pred, alpha=0.05):
+        """Calculates the lower and upper prediction interval for a single point according to Fahrmeir, Chap. 3.3.2"""
+        knots = self.smooths[0].knots
+        df = self.basis.shape[0] - self.basis.shape[1]
+        t_value = t.ppf(1-alpha/2, df=df)
+        XX_inv = np.linalg.inv(self.basis.T @ self.basis)
+        residual = self.mse * (self.basis.shape[0] / df)
+        xi = []
+        for i in range(self.basis.shape[1]):
+            xi.append(self.smooths[0].bspline(x=x_pred, knots=knots, i=i, m=2))
+        xi = np.array(xi)
+        pred = xi @ self.coef_
+        pred_interval = t_value * residual * np.sqrt(1 + xi.T @ XX_inv @ xi)
+        return (pred-pred_interval, pred+pred_interval)
+
+    def calc_prediction_interval(self, x_pred, alpha=0.05, fig=False):
+        """Calculate and plot the prediction interval for multiple points according to Fahrmeir, Chap. 3.3.2"""
+        y_lower, y_upper = [], []
+        for x in x_pred:
+            pi = self.calc_single_point_prediction_interval(x_pred=x)
+            y_lower.append(pi[0])
+            y_upper.append(pi[1]) 
+        if fig:
+            fig.add_trace(go.Scatter(x=x_pred, y=y_lower, name="Lower PI", mode="lines", line=dict(dash="dashdot", color="violet")))
+            fig.add_trace(go.Scatter(x=x_pred, y=y_upper, name="Upper PI", mode="lines", line=dict(dash="dashdot", color="violet")))
+            return fig
+        return (y_lower, y_upper)
 
     def plot_confidence_intervals(self, alpha=0.05, fig=None, y=None, x=None):
         """Plot the confidence intervals into fig. """
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using plot_confidence_intervals()!")
         beta_lower, beta_upper = self.calc_confidence_intervals(alpha=0.05, y=y)
-        fig.add_trace(go.Scatter(x=x.ravel(), y=self.basis @ beta_lower, name="Lower Confidence Interval Bound", mode="lines"))
-        fig.add_trace(go.Scatter(x=x.ravel(), y=self.basis @ beta_upper, name="Upper Confidence Interval Bound", mode="lines"))
+        fig.add_trace(go.Scatter(
+            x=x.ravel(), y=self.basis @ beta_lower, name="Lower Confidence Interval Bound", mode="lines",
+            line=dict(dash="dash", color="green")))
+        fig.add_trace(go.Scatter(
+            x=x.ravel(), y=self.basis @ beta_upper, name="Upper Confidence Interval Bound", mode="lines",
+            line=dict(dash="dash", color="green")))
         return fig
 
     def plot_cost_function_partition(self, y, print_=True):
