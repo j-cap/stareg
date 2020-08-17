@@ -3,6 +3,7 @@
 
 import numpy as np
 import plotly.graph_objects as go
+import copy
 
 from .utils import add_vert_line
 from .penalty_matrix import PenaltyMatrix
@@ -77,9 +78,8 @@ class Bspline(PenaltyMatrix):
 
         if not hasattr(self, 'm'):
             self.m = m
-        
         assert (type(x_data) is np.ndarray), "Type of x is not ndarray!"
-        x_data.sort()
+        
         n = len(x_data) # n = number of data
         X = np.zeros((n, k))
         

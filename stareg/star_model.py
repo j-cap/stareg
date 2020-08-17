@@ -238,7 +238,9 @@ class StarModel(BaseEstimator):
         #  TODO:
         #     [x] check constraint violation in the iterative fit
         #     [x] incorporate TPS in the iterative fit
-                
+
+        if len(X.shape) == 1:
+            X = X.values.reshape((-1,1))
         X, y = check_X_y(X, y.ravel())
         self = self.calc_LS_fit(X=X, y=y)
         df = self.create_df_for_beta(beta_init=self.coef_)
@@ -313,11 +315,13 @@ class StarModel(BaseEstimator):
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self      
     
-    def calc_inv_cov_beta(self, y=None):
+    def calc_cov_beta(self, y=None):
         """Calculate the covariance matrix for the coefficients"""
         
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_cov_beta()!")
-        cov_beta = np.linalg.pinv(self.basis.T @ self.basis)
+        XtX_inv = np.linalg.pinv(self.basis.T @ self.basis)
+        n, p = self.basis.shape[0], self.basis.shape[1]
+        cov_beta = (1 / (n-p)) * self.mse * XtX_inv
         return cov_beta
 
 
@@ -325,29 +329,28 @@ class StarModel(BaseEstimator):
         """Calculates the lower and upper confidence interval for the fitted coefficients coef_."""
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_confidence_intervals()!")
-        beta_hat = self.coef_
-        eff_dof = self.basis.shape[0] - self.basis.shape[1]
-        t_np = t.ppf(q=1-alpha/2, df=eff_dof)
-        inv_cov_beta = self.calc_inv_cov_beta(y=y)
-        se_beta = np.sqrt(np.diag(inv_cov_beta)) * self.mse * (self.basis.shape[0] / eff_dof)
+        n, p = self.basis.shape[0], self.basis.shape[1]
+        t_value = t.ppf(q=1-alpha/2, df=n-p)
+        se_beta = np.sqrt(np.diag(self.calc_cov_beta(y=y)))
 
-        beta_lower = beta_hat - t_np * se_beta
-        beta_upper = beta_hat + t_np * se_beta
+        beta_lower = self.coef_ - t_value * se_beta
+        beta_upper = self.coef_ + t_value * se_beta
         return beta_lower, beta_upper
 
     def calc_single_point_prediction_interval(self, x_pred, alpha=0.05):
         """Calculates the lower and upper prediction interval for a single point according to Fahrmeir, Chap. 3.3.2"""
+
+        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_single_point_prediction_interval()!")
         knots = self.smooths[0].knots
-        df = self.basis.shape[0] - self.basis.shape[1]
-        t_value = t.ppf(1-alpha/2, df=df)
-        XX_inv = np.linalg.inv(self.basis.T @ self.basis)
-        residual = self.mse * (self.basis.shape[0] / df)
+        n, p = self.basis.shape[0], self.basis.shape[1]
+        t_value = t.ppf(1-alpha/2, df=n-p)
+        XtX_inv = np.linalg.inv(self.basis.T @ self.basis)
         xi = []
         for i in range(self.basis.shape[1]):
             xi.append(self.smooths[0].bspline(x=x_pred, knots=knots, i=i, m=2))
         xi = np.array(xi)
         pred = xi @ self.coef_
-        pred_interval = t_value * residual * np.sqrt(1 + xi.T @ XX_inv @ xi)
+        pred_interval = t_value * np.sqrt( self.mse / (n-p)) * np.sqrt(1 + xi.T @ XtX_inv @ xi)
         return (pred-pred_interval, pred+pred_interval)
 
     def calc_prediction_interval(self, x_pred, alpha=0.05, fig=False):
@@ -397,8 +400,7 @@ class StarModel(BaseEstimator):
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using plot_cost_function_partition()!")
         #  smoothness part of the cost function
-        P = PenaltyMatrix()
-        S = P.smoothness_matrix(n_param=self.smooths[0].n_param)
+        S = PenaltyMatrix().smoothness_matrix(n_param=self.smooths[0].n_param)
         #  lam_s = self.description_dict["s(1)"]["lam"]["smoothness"]
         #  lam_c = self.description_dict["s(1)"]["lam"]["constraint"]
         J = self.coef_.T @ S.T @ S @ self.coef_
@@ -411,10 +413,10 @@ class StarModel(BaseEstimator):
         D_pre = mean_squared_error(y, self.basis @ self.LS_coef_)
 
         fig = go.Figure(data=[go.Pie(labels=["Data", "Smoothness", "Constraint"], values=[D, J, J_constr])])
-        fig.update_layout(title="Cost function partition")
+        fig.update_layout(title="Cost function partition of constraint LS fit")
 
         fig2 = go.Figure(data=[go.Pie(labels=["Data", "Smoothness", "Constraint"], values=[D_pre, J_pre, J_constr_pre])])
-        fig2.update_layout(title="Cost function partition")
+        fig2.update_layout(title="Cost function partition of pure LS fit")
 
         if print_:
             print("Values without lambdas: ")
@@ -686,6 +688,7 @@ class StarModel(BaseEstimator):
 
         """
 
+
         X, y = check_X_y(X=X, y=y)
         grid = self.generate_GCV_parameter_list(n_grid=n_grid, p_min=p_min)
         gcv_scores, violated_constraints_list = [], []
@@ -710,7 +713,7 @@ class StarModel(BaseEstimator):
         print(f"Best fit parameter according to adapted-GCV score: {gcv_best}")
         print(f"Violated Constraints: {np.sum(violated_constraints_list[np.argmin(gcv_scores)])} from {len(self.coef_)}")
         self.set_params_after_gcv(params=gcv_best)
-        self.fit(X=X, y=y, plot_=True)
+        self.fit(X=X, y=y, plot_=plot_)
         self.gcv_best = gcv_best
         return self
  
