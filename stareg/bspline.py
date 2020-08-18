@@ -133,39 +133,32 @@ class Bspline(PenaltyMatrix):
             fig.update_layout(title="B-Spline basis")
         return fig
 
-    def spp(self, sp=0, coef_=None):
+    def spp(self, sp=0, coef_=None, knots=None):
         """Calculate the single point prediction for B-splines given the coefficients. 
-        
+
         Parameters
         ----------
         sp : float
             Single point to calculate the prediction for.
         coef_ : np.array
             Calculated coefficients for the B-splines.
-            
+        knots : np.array
+            Knot sequence. 
+
         Returns
         -------
         p : np.float
             Predicted value. 
-            
+
         """
-        knots = self.knots
-        idx = np.argwhere(knots >= sp)[0][0]
+        #  knots = self.knots
+        if sp != 1:
+            idx = np.argwhere(knots > sp)[0][0]
+        else:
+            idx = np.argwhere(knots >= sp)[0][0]
         s = []
-        
-        if  len(knots)-4 > idx >= 4:
-            # interior knots
-            [s.append(self.bspline(x=sp, knots=knots[idx-4:], i=i, m=2)) for i in range(4)]
-        elif idx < 4:
-            # left boundary knots
-            [s.append(self.bspline(x=sp, knots=knots, i=i, m=2)) for i in range(4)]
-            idx += 1
-        elif idx >= len(knots)-4:
-            # right boundary knots
-            #s.append(0.)
-            [s.append(self.bspline(x=sp, knots=knots[idx-4:], i=i, m=2)) for i in range(4)]
-        p = np.sum(np.array(s) * coef_[idx-4:idx])   
-        return p
+        [s.append(self.bspline(x=sp, knots=knots[idx-4:idx+4], i=i, m=2)) for i in range(4)]
+        return sum(s * coef_[idx-4:idx])
 
     def right_exterior_spp(self, sp=1.1, coef_=None, width=5):
         """SPP for extrapolation towards zero on the right side.

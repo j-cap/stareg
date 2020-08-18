@@ -21,7 +21,7 @@ from .smooth import Smooths as s
 from .smooth import TensorProductSmooths as tps
 from .penalty_matrix import PenaltyMatrix
 from .utils import check_constraint, check_constraint_full_model
-
+from .utils import test_model_against_constraint
 
 class StarModel(BaseEstimator):
     """Implementation of a structured additive regression model.
@@ -262,7 +262,7 @@ class StarModel(BaseEstimator):
                 break
 
         self.df = df
-        self.mse = mean_squared_error(y, self.basis @ self.coef_)       
+        self.mse = np.round(mean_squared_error(y, self.basis @ self.coef_), 7)       
         if plot_: 
             self.plot_fit(X=X, y=y).show()
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
@@ -519,7 +519,8 @@ class StarModel(BaseEstimator):
         for x in X_pred:
             if 0 <= x <= 1:
                 #print("inside prediction")
-                y_pred.append(self.smooths[0].spp(sp=x, coef_=self.coef_))
+                y_pred.append(self.smooths[0].spp(
+                    sp=x, coef_=self.coef_, knots=self.smooths[0].knots))
             else:
                 #print("extrapolation area with type = ", extrapol_type)
                 y_pred.append(self.extrapolate(x_exp=x, type_=extrapol_type, depth=3))
@@ -543,7 +544,8 @@ class StarModel(BaseEstimator):
 
         """
 
-        return self.smooths[0].spp(sp=x_sp, coef_=self.coef_)
+        return self.smooths[0].spp(
+            sp=x_sp, coef_=self.coef_, knots=self.smooths[0].knots)
 
 
     def extrapolate(self, x_exp, type_="constant", depth=5):
@@ -763,3 +765,15 @@ class StarModel(BaseEstimator):
             descr_dict[s]["lam"][t] = params[k]
         self.description_dict = descr_dict
 
+
+
+    def eval_metric(self, X_test=None, y_test=None, precision=5):
+        """Evaulate the metric for the given model. """
+        test = test_model_against_constraint(model=self, plot_=False)
+        ICP = test.sum() / len(test)
+        
+        y_pred = self.predict(X_pred=X_test)
+        mse_test = mean_squared_error(y_pred, y_test)
+
+        metric = 1*mse_test + 1*ICP
+        return np.round(metric, precision)
