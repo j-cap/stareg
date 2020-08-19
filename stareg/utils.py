@@ -59,7 +59,7 @@ def check_valley_constraint(beta):
     Returns
     -------
     v : array
-        Vector of with 1 where constraint is violated, 0 elsewhere.
+        Vector with 1 where constraint is violated, 0 elsewhere.
 
     """
 
@@ -72,6 +72,16 @@ def check_valley_constraint(beta):
 def check_multi_valley_constraint(beta):
     """Check whether beta contains 2 peaks and is increasing to the first,
     then decreasing, then again increasing and then again decreasing
+
+    Parameters
+    ----------
+    beta : array
+        Array of coefficients to test for multi_valley constraint
+
+    Returns
+    -------
+    v : array
+        Vaector with 1 where constraint is violated, 0 elsewhere
     """
 
     valleys, _ = find_peaks(x=-1*beta, prominence=np.std(beta), distance=int(len(beta)/3))
@@ -92,7 +102,7 @@ def check_peak_constraint(beta):
     Returns
     -------
     v : array
-        Vector of with 1 where constraint is violated, 0 elsewhere.
+        Vector with 1 where constraint is violated, 0 elsewhere.
 
     """
 
@@ -105,6 +115,18 @@ def check_peak_constraint(beta):
 def check_multi_peak_constraint(beta):
     """Check whether beta contains 2 peaks and is increasing to the first,
     then decreasing, then again increasing and then again decreasing
+
+
+    Parameters
+    ----------
+    beta : array
+        Array of coefficients to test for multi_peak constraint.
+
+    Returns
+    -------
+    v : array
+        Vector with 1 where constraint is violated, 0 elsewhere.
+
     """
 
     peaks, _ = find_peaks(x=beta, prominence=np.std(beta), distance=int(len(beta)/3))
@@ -115,7 +137,21 @@ def check_multi_peak_constraint(beta):
     return v.astype(np.int)
 
 def check_peak_and_valley_constraint(beta):
-    """ Check whether beta contains a peak and a valley """
+    """ Check whether beta contains a peak and a valley.
+    
+    
+    Parameters
+    ----------
+    beta : array
+        Array of coefficients to test for peak_and_valley constraint.
+
+    Returns
+    -------
+    v : array
+        Vector with 1 where constraint is violated, 0 elsewhere.
+
+    """
+
     peak, _ = find_peaks(x=beta, distance=len(beta))
     valley, _ = find_peaks(x=-beta, distance=len(beta))
     middle_spline = int(np.mean([peak, valley]))
@@ -215,9 +251,20 @@ def add_vert_line(fig, x0=0, y0=0, y1=1):
                        line=dict(color="LightSeaGreen", width=1)))
     
 def test_model_against_constraint(model, plot_=False):
-    """Test the model against the constraint. 
+    """Test the model against the constraint on a fine prediction grid. 
     
-    If the model fails the constraint, place a 1 at the point, else place a 0. 
+    Parameters
+    ----------
+    model : StarModel()
+        Instance of StarModel.
+    plot_ : boolean
+        Indicator whether to plot the violated constraints
+
+    Returns
+    -------
+    test : array
+        Array of 1s where the constraint is violated, 0 elsewhere.
+        
     """
         
     x_test = np.linspace(0,1,10000)

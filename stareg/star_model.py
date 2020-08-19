@@ -271,6 +271,24 @@ class StarModel(BaseEstimator):
     def weighted_fit(self, X, y, critical_point=None, plot_=True, max_iter=5):
         """Calculate a weighted PIRLS fit that goes through the critical point. 
 
+        Parameters
+        ----------
+        X : np.ndarray
+            Data of size (n_samples, n_dimensions).
+        y : array
+            Target data of size (n_samples, ).
+        max_iter : int
+            Maximal number of iterations of PIRLS.
+        plot_ : boolean
+            Indicatior whether to plot the results.
+        critical_point: array
+            Critical points for the weighted fit. More than one are allowed.
+
+        Returns 
+        -------
+        self : object
+            Returns the fitted model.        
+
         """
         assert (X.shape[1] == 1), "Only 1-d fits currently possible!"
         if critical_point is None:
@@ -315,8 +333,15 @@ class StarModel(BaseEstimator):
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self      
     
-    def calc_cov_beta(self, y=None):
-        """Calculate the covariance matrix for the coefficients"""
+    def calc_cov_beta(self):
+        """Calculate the covariance matrix for the coefficients.
+
+        Returns
+        -------
+        cov_beta : ndarray
+            REML estimator for the covariance matrix for the coefficients.
+
+        """
         
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_cov_beta()!")
         XtX_inv = np.linalg.pinv(self.basis.T @ self.basis)
@@ -325,20 +350,51 @@ class StarModel(BaseEstimator):
         return cov_beta
 
 
-    def calc_confidence_intervals(self, alpha=0.05, y=None):
-        """Calculates the lower and upper confidence interval for the fitted coefficients coef_."""
+    def calc_confidence_intervals(self, alpha=0.05):
+        """Calculates the lower and upper confidence interval for the fitted coefficients coef_.
+        
+        Currently, only 1D is possible.
+
+        Parameters
+        ----------
+        alpha : float
+            Confidence interval level.
+        
+        Returns
+        -------
+        beta_lower : array
+            Lower confidence bound for the coefficients.
+        beta_upper : array
+            Upper confidence bound for the coefficients.
+
+        """
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_confidence_intervals()!")
         n, p = self.basis.shape[0], self.basis.shape[1]
         t_value = t.ppf(q=1-alpha/2, df=n-p)
-        se_beta = np.sqrt(np.diag(self.calc_cov_beta(y=y)))
+        se_beta = np.sqrt(np.diag(self.calc_cov_beta()))
 
         beta_lower = self.coef_ - t_value * se_beta
         beta_upper = self.coef_ + t_value * se_beta
         return beta_lower, beta_upper
 
     def calc_single_point_prediction_interval(self, x_pred, alpha=0.05):
-        """Calculates the lower and upper prediction interval for a single point according to Fahrmeir, Chap. 3.3.2"""
+        """Calculates the prediction interval for a single point according to Fahrmeir, Chap. 3.3.2.
+        
+        Currently, only 1D is possible. 
+
+        Parameters
+        ----------
+        x_pred : float
+            Point to calculate the prediction interval for.
+        alpha : float
+            Prediction interval level.
+        Returns
+        -------
+        lower_pi, upper_pi : tuple
+            Lower and upper prediction interval bounds. 
+
+        """
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_single_point_prediction_interval()!")
         knots = self.smooths[0].knots
@@ -354,7 +410,25 @@ class StarModel(BaseEstimator):
         return (pred-pred_interval, pred+pred_interval)
 
     def calc_prediction_interval(self, x_pred, alpha=0.05, fig=False):
-        """Calculate and plot the prediction interval for multiple points according to Fahrmeir, Chap. 3.3.2"""
+        """Calculate and plot the prediction interval for multiple points according to Fahrmeir, Chap. 3.3.2. 
+        
+        Currently, only 1D is possible.
+        
+        Parameters
+        ----------
+        x_pred : array
+            Array to calculate the prediction interval for.
+        alpha : float
+            Prediction interval level
+        fig : go.Figure()
+            Figure to plot the prediction interval in.
+        
+        Returns
+        -------
+        y_lower, y_upper : tuple
+            Lower and upper prediction interval bounds.
+
+        """
         y_lower, y_upper = [], []
         for x in x_pred:
             pi = self.calc_single_point_prediction_interval(x_pred=x)
@@ -510,19 +584,12 @@ class StarModel(BaseEstimator):
         """
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
-        #  y_pred = np.zeros((len(self.smooths), X_pred.shape[0]))
-        #  for i, sp in enumerate(X_pred):
-        #      for i2, (x_i, s) in enumerate(zip(sp, self.smooths)):
-        #          y_pred[i2, i] = s.spp(sp=x_i, coef_=self.coef_[self.coef_list[i2]:self.coef_list[i2+1]])
-        #  y_pred = y_pred.sum(axis=0)
         y_pred = []
         for x in X_pred:
             if 0 <= x <= 1:
-                #print("inside prediction")
                 y_pred.append(self.smooths[0].spp(
                     sp=x, coef_=self.coef_, knots=self.smooths[0].knots))
             else:
-                #print("extrapolation area with type = ", extrapol_type)
                 y_pred.append(self.extrapolate(x_exp=x, type_=extrapol_type, depth=3))
         y_pred = np.array([y_pred])
         return y_pred.ravel()
@@ -549,12 +616,24 @@ class StarModel(BaseEstimator):
 
 
     def extrapolate(self, x_exp, type_="constant", depth=5):
-        """
-        Type is either "constant", "linear", "zero"
+        """ Evaluate the extrapolation value for the given x_exp. 
 
-        depth: how many coefficients are taken into account for the linear extrapolation
+        Parameters
+        ----------
+        x_exp : array
+            Data to calculate the extrapolation for.
+        type_ : str
+            Describes the extrapolation type, either "constant", "linear", "zero".
+        depth : int
+            Describes ow many coefficients are taken into account for the linear extrapolation.
+
+        Returns
+        -------
+        y_extrapolate : array
+            Extrapolation value.
 
         """
+
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using extrapolate()!")
         assert (type_ in ["constant", "linear", "zero"]), f"Typ_ '{type_}' not supported!"
         direction = "left" if x_exp < 0 else "right"
@@ -768,7 +847,26 @@ class StarModel(BaseEstimator):
 
 
     def eval_metric(self, X_test=None, y_test=None, precision=5):
-        """Evaulate the metric for the given model. """
+        """Evaulate the metric M = MSE_prediction + ICP. 
+        
+        ICP = Invalid Constraint percentage. 
+        
+        Parameters
+        ----------
+        X_test : array
+            Data to calculate the prediction MSE for.
+        y_test : arrray
+            Data to calculate the prediciton MSE for.
+        precision: int
+            Precision of the metric
+
+        Returns
+        -------
+        metric : float
+            Value of the metric.
+
+        """
+
         test = test_model_against_constraint(model=self, plot_=False)
         ICP = test.sum() / len(test)
         
