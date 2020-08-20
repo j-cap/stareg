@@ -106,6 +106,32 @@ class Bspline(PenaltyMatrix):
         self.knot_type = type_
         self.n_param = int(X.shape[1])
     
+    def spp(self, sp=0, coef_=None, knots=None):
+        """Calculate the single point prediction for B-splines given the coefficients. 
+
+        Parameters
+        ----------
+        sp : float
+            Single point to calculate the prediction for.
+        coef_ : np.array
+            Calculated coefficients for the B-splines.
+        knots : np.array
+            Knot sequence. 
+
+        Returns
+        -------
+        p : np.float
+            Predicted value. 
+
+        """
+
+        if sp != 1:
+            idx = np.argwhere(knots > sp)[0][0]
+        else:
+            idx = np.argwhere(knots >= sp)[0][0]
+        s = []
+        [s.append(self.bspline(x=sp, knots=knots[idx-4:idx+4], i=i, m=2)) for i in range(4)]
+        return sum(s * coef_[idx-4:idx])                    
 
     def plot_basis(self, title=""):
         """Plot the B-spline basis matrix and the knot loactions.
@@ -132,92 +158,3 @@ class Bspline(PenaltyMatrix):
         else:
             fig.update_layout(title="B-Spline basis")
         return fig
-
-    def spp(self, sp=0, coef_=None, knots=None):
-        """Calculate the single point prediction for B-splines given the coefficients. 
-
-        Parameters
-        ----------
-        sp : float
-            Single point to calculate the prediction for.
-        coef_ : np.array
-            Calculated coefficients for the B-splines.
-        knots : np.array
-            Knot sequence. 
-
-        Returns
-        -------
-        p : np.float
-            Predicted value. 
-
-        """
-        #  knots = self.knots
-        if sp != 1:
-            idx = np.argwhere(knots > sp)[0][0]
-        else:
-            idx = np.argwhere(knots >= sp)[0][0]
-        s = []
-        [s.append(self.bspline(x=sp, knots=knots[idx-4:idx+4], i=i, m=2)) for i in range(4)]
-        return sum(s * coef_[idx-4:idx])
-
-    def right_exterior_spp(self, sp=1.1, coef_=None, width=5):
-        """SPP for extrapolation towards zero on the right side.
-        
-        Parameters
-        ----------
-        sp : float
-            Single point data.
-        coef_ : np.array
-            Coefficients of the fitted model.
-            
-        Returns
-        -------
-        p : float
-            Predicted value.
-            
-        """
-        
-        #  generate the Bspline basis for the extrapolation area
-        n_splines = 25
-        x_exp = np.linspace(1, 1.5, 100)
-        B = Bspline()
-        B.bspline_basis(x_data=x_exp, k=n_splines, type_="equidistant")
-        #  calculate the coefficients for the Bspline basis
-        coef_lin = np.linspace(0,1, n_splines)
-        coef = np.exp(-coef_lin**2 / (1/width)) * np.mean(coef_[-3:])
-        #  calculate the extrapolation point    
-        return B.spp(sp=sp, coef_=coef)
-
-    def left_exterior_spp(self, sp=-0.1, coef_=None, width=5):
-        """SPP for extrapolation towards zero on the left side.
-        
-        Parameter
-        ---------
-        sp : float
-            Single point data.
-        coef_ : np.array
-            Coefficients of the fitted model.
-            
-        Returns
-        -------
-        p : float
-            Predicted value.
-            
-        """
-
-        #  generate the Bspline basis for the extrapolation area
-        n_splines = 25
-        x_exp = np.linspace(-0.5, 0, 100)
-        B = Bspline()
-        B.bspline_basis(x_data=x_exp, k=n_splines, type_="equidistant")
-        #  calculate the coeffficients for the Bspline basis
-        coef_lin = np.linspace(0,1, n_splines)
-        coef = np.exp(-coef_lin[::-1]**2 / (1/width)) * np.mean(coef_[:3])
-        #  calculate the extrapolation point
-        return B.spp(sp=sp, coef_=coef)
-
-
-
-
-
-                    

@@ -334,7 +334,7 @@ class StarModel(BaseEstimator):
         return self      
     
     def calc_cov_beta(self):
-        """Calculate the covariance matrix for the coefficients.
+        """Calculate the REML estimator for the covariance matrix for the coefficients.
 
         Returns
         -------
@@ -343,9 +343,28 @@ class StarModel(BaseEstimator):
 
         """
         
-        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_cov_beta()!")
+        check_is_fitted(self, attributes="basis", msg="Basis not available when using calc_cov_beta()!")
         XtX_inv = np.linalg.pinv(self.basis.T @ self.basis)
         n, p = self.basis.shape[0], self.basis.shape[1]
+        cov_beta = (1 / (n-p)) * self.mse * XtX_inv
+        return cov_beta
+
+
+    def calc_cov_nonparametric(self):
+        """Calculate the estimator for the covariance matrix  in nonparametric regression.
+
+        Returns
+        -------
+        cov : ndarray
+            Covariance matrix.
+
+        """
+        
+        check_is_fitted(self, attributes="basis", msg="Basis not available when using calc_cov_beta()!")
+        S = self.calc_hat_matrix()
+
+        n self.basis.shape[0]
+        dof_res = np.trace(2*S - S @ S.T)
         cov_beta = (1 / (n-p)) * self.mse * XtX_inv
         return cov_beta
 
@@ -444,7 +463,7 @@ class StarModel(BaseEstimator):
         """Plot the confidence intervals into fig. """
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using plot_confidence_intervals()!")
-        beta_lower, beta_upper = self.calc_confidence_intervals(alpha=0.05, y=y)
+        beta_lower, beta_upper = self.calc_confidence_intervals(alpha=0.05)
         fig.add_trace(go.Scatter(
             x=x.ravel(), y=self.basis @ beta_lower, name="Lower Confidence Interval Bound", mode="lines",
             line=dict(dash="dash", color="green")))
@@ -562,7 +581,7 @@ class StarModel(BaseEstimator):
         )
         return fig       
 
-    def predict(self, X_pred, extrapol_type="zero", depth=3):
+    def predict(self, X_pred, extrapol_type="zero", depth=10):
         """Prediction of the trained model on the data in X.
         
         Currently only 1-DIMENSIONAL prediction possible !!!
@@ -571,7 +590,7 @@ class StarModel(BaseEstimator):
         ----------
         X_pred : np.ndarray
             Data of shape (n_samples,) to predict values for.
-        extrapol_type: str
+        extrapol_type: 
             Indiactor of the extrapolation type. 
         depth : int
             Indicates how many coefficients are used for the linear extrapolation.
@@ -590,7 +609,7 @@ class StarModel(BaseEstimator):
                 y_pred.append(self.smooths[0].spp(
                     sp=x, coef_=self.coef_, knots=self.smooths[0].knots))
             else:
-                y_pred.append(self.extrapolate(x_exp=x, type_=extrapol_type, depth=3))
+                y_pred.append(self.extrapolate(x_exp=x, type_=extrapol_type, depth=depth))
         y_pred = np.array([y_pred])
         return y_pred.ravel()
 
@@ -615,7 +634,7 @@ class StarModel(BaseEstimator):
             sp=x_sp, coef_=self.coef_, knots=self.smooths[0].knots)
 
 
-    def extrapolate(self, x_exp, type_="constant", depth=5):
+    def extrapolate(self, x_exp, type_="constant", depth=10):
         """ Evaluate the extrapolation value for the given x_exp. 
 
         Parameters
@@ -625,7 +644,7 @@ class StarModel(BaseEstimator):
         type_ : str
             Describes the extrapolation type, either "constant", "linear", "zero".
         depth : int
-            Describes ow many coefficients are taken into account for the linear extrapolation.
+            Describes how many coefficients are taken into account for the linear extrapolation.
 
         Returns
         -------
@@ -647,18 +666,14 @@ class StarModel(BaseEstimator):
             k = np.mean(self.coef_[-depth:])
 
         if type_ == "constant":
-            #print("const")
             y_extrapolate = y_boundary
         elif type_ == "linear":
-            #print("linear")
             dx = x_exp-1 if x_exp > 0 else np.abs(x_exp)
             y_extrapolate = y_boundary + dx * k
         elif type_ == "zero" and direction == "left":
-            #print("left + zero")
-            y_extrapolate = self.smooths[0].left_exterior_spp(sp=x_exp, coef_=self.coef_, width=depth)
+            y_extrapolate = self.predict_single_point(0) * np.exp(-(x_exp - 0)**2 / (1/depth))
         elif type_ == "zero" and direction == "right":
-            #print("right + zero")
-            y_extrapolate = self.smooths[0].right_exterior_spp(sp=x_exp, coef_=self.coef_, width=depth)
+            y_extrapolate = self.predict_single_point(1) * np.exp(-(x_exp - 1)**2 / (1/depth))
         else:
             return
 
