@@ -363,9 +363,9 @@ class StarModel(BaseEstimator):
         check_is_fitted(self, attributes="basis", msg="Basis not available when using calc_cov_beta()!")
         S = self.calc_hat_matrix()
 
-        n self.basis.shape[0]
+        n = self.basis.shape[0]
         dof_res = np.trace(2*S - S @ S.T)
-        cov_beta = (1 / (n-p)) * self.mse * XtX_inv
+        cov_beta = (1 / (n-p)) * self.mse 
         return cov_beta
 
 
@@ -888,5 +888,7 @@ class StarModel(BaseEstimator):
         y_pred = self.predict(X_pred=X_test)
         mse_test = mean_squared_error(y_pred, y_test)
 
+        # metric = (1 + ICP) * mse_test 
         metric = 1*mse_test + 1*ICP
+
         return np.round(metric, precision)
