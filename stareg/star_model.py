@@ -10,7 +10,7 @@ import copy
 from numpy.linalg import lstsq
 from scipy.linalg import block_diag
 from scipy.signal import find_peaks
-from scipy.stats import t
+from scipy.stats import t, norm
 from sklearn.metrics import mean_squared_error
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_X_y 
@@ -332,143 +332,64 @@ class StarModel(BaseEstimator):
             self.plot_fit(X=X, y=y).show()
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self      
-    
-    def calc_cov_beta(self):
-        """Calculate the REML estimator for the covariance matrix for the coefficients.
+        
+    def confidence_interval(self, x, alpha=0.05, bonferroni=True):
+        """Calculate the confidence interval/band for nonparametric regression models.
+
+        Based on Fahrmeir, Regression Chap. 8.1.8, p. 470
+
+        Parameters
+        ----------
+        x : array
+            Point/Points to calculate the confidence interval/band for.
+        alpha: float
+            Confidence level.
+        bonferroni: boolean
+            Indicator whether to use the bonferroni correction for the confidence bands.
 
         Returns
         -------
-        cov_beta : ndarray
-            REML estimator for the covariance matrix for the coefficients.
-
-        """
+        y_m : array
+            Lower confidence interval/band.
+        y_p : array
+            Upper confidence interval/band.
         
-        check_is_fitted(self, attributes="basis", msg="Basis not available when using calc_cov_beta()!")
-        XtX_inv = np.linalg.pinv(self.basis.T @ self.basis)
-        n, p = self.basis.shape[0], self.basis.shape[1]
-        cov_beta = (1 / (n-p)) * self.mse * XtX_inv
-        return cov_beta
-
-
-    def calc_cov_nonparametric(self):
-        """Calculate the estimator for the covariance matrix  in nonparametric regression.
-
-        Returns
-        -------
-        cov : ndarray
-            Covariance matrix.
-
         """
-        
-        check_is_fitted(self, attributes="basis", msg="Basis not available when using calc_cov_beta()!")
+
+        y_p = self.predict(X_pred=x)
+        Z = self.basis
+        lambda_k = self.constraint_penalty_matrix
         S = self.calc_hat_matrix()
-
-        n = self.basis.shape[0]
-        dof_res = np.trace(2*S - S @ S.T)
-        cov_beta = (1 / (n-p)) * self.mse 
-        return cov_beta
-
-
-    def calc_confidence_intervals(self, alpha=0.05):
-        """Calculates the lower and upper confidence interval for the fitted coefficients coef_.
         
-        Currently, only 1D is possible.
+        if bonferroni:
+            m = norm.ppf(1 - alpha/(2*x.shape[0]))
+        else:
+            m = norm.ppf(1 - alpha/2)
+        sigma_hat = np.sqrt(1 / (Z.shape[0] - np.trace(2*S - S @ S.T)) * Z.shape[0] * self.mse)
 
-        Parameters
-        ----------
-        alpha : float
-            Confidence interval level.
+        z = np.empty((x.shape[0], len(self.coef_)))
+        for coef_idx in range(len(self.coef_)):
+            z[:,coef_idx] = self.smooths[0].bspline(x=x, knots=self.smooths[0].knots, i=coef_idx, m=2)
         
-        Returns
-        -------
-        beta_lower : array
-            Lower confidence bound for the coefficients.
-        beta_upper : array
-            Upper confidence bound for the coefficients.
-
-        """
-
-        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_confidence_intervals()!")
-        n, p = self.basis.shape[0], self.basis.shape[1]
-        t_value = t.ppf(q=1-alpha/2, df=n-p)
-        se_beta = np.sqrt(np.diag(self.calc_cov_beta()))
-
-        beta_lower = self.coef_ - t_value * se_beta
-        beta_upper = self.coef_ + t_value * se_beta
-        return beta_lower, beta_upper
-
-    def calc_single_point_prediction_interval(self, x_pred, alpha=0.05):
-        """Calculates the prediction interval for a single point according to Fahrmeir, Chap. 3.3.2.
+        s_t = z @ np.linalg.inv(Z.T @ Z + lambda_k) @ Z.T
+        sqrt_sts = np.sqrt(np.diag(s_t @ s_t.T))
         
-        Currently, only 1D is possible. 
-
-        Parameters
-        ----------
-        x_pred : float
-            Point to calculate the prediction interval for.
-        alpha : float
-            Prediction interval level.
-        Returns
-        -------
-        lower_pi, upper_pi : tuple
-            Lower and upper prediction interval bounds. 
-
-        """
-
-        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using calc_single_point_prediction_interval()!")
-        knots = self.smooths[0].knots
-        n, p = self.basis.shape[0], self.basis.shape[1]
-        t_value = t.ppf(1-alpha/2, df=n-p)
-        XtX_inv = np.linalg.inv(self.basis.T @ self.basis)
-        xi = []
-        for i in range(self.basis.shape[1]):
-            xi.append(self.smooths[0].bspline(x=x_pred, knots=knots, i=i, m=2))
-        xi = np.array(xi)
-        pred = xi @ self.coef_
-        pred_interval = t_value * np.sqrt( self.mse / (n-p)) * np.sqrt(1 + xi.T @ XtX_inv @ xi)
-        return (pred-pred_interval, pred+pred_interval)
-
-    def calc_prediction_interval(self, x_pred, alpha=0.05, fig=False):
-        """Calculate and plot the prediction interval for multiple points according to Fahrmeir, Chap. 3.3.2. 
+        y_m = y_p - m * sigma_hat * sqrt_sts
+        y_p = y_p + m * sigma_hat * sqrt_sts
         
-        Currently, only 1D is possible.
-        
-        Parameters
-        ----------
-        x_pred : array
-            Array to calculate the prediction interval for.
-        alpha : float
-            Prediction interval level
-        fig : go.Figure()
-            Figure to plot the prediction interval in.
-        
-        Returns
-        -------
-        y_lower, y_upper : tuple
-            Lower and upper prediction interval bounds.
+        return y_m, y_p
 
-        """
-        y_lower, y_upper = [], []
-        for x in x_pred:
-            pi = self.calc_single_point_prediction_interval(x_pred=x)
-            y_lower.append(pi[0])
-            y_upper.append(pi[1]) 
-        if fig:
-            fig.add_trace(go.Scatter(x=x_pred, y=y_lower, name="Lower PI", mode="lines", line=dict(dash="dashdot", color="violet")))
-            fig.add_trace(go.Scatter(x=x_pred, y=y_upper, name="Upper PI", mode="lines", line=dict(dash="dashdot", color="violet")))
-            return fig
-        return (y_lower, y_upper)
 
-    def plot_confidence_intervals(self, alpha=0.05, fig=None, y=None, x=None):
+    def plot_confidence_intervals(self, alpha=0.05, fig=None, y=None, x=None, bonferroni=True):
         """Plot the confidence intervals into fig. """
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using plot_confidence_intervals()!")
-        beta_lower, beta_upper = self.calc_confidence_intervals(alpha=0.05)
+        y_m, y_p = self.confidence_interval(x=x, alpha=alpha, bonferroni=bonferroni)
         fig.add_trace(go.Scatter(
-            x=x.ravel(), y=self.basis @ beta_lower, name="Lower Confidence Interval Bound", mode="lines",
+            x=x.ravel(), y=y_m, name="Lower Confidence Band", mode="lines",
             line=dict(dash="dash", color="green")))
         fig.add_trace(go.Scatter(
-            x=x.ravel(), y=self.basis @ beta_upper, name="Upper Confidence Interval Bound", mode="lines",
+            x=x.ravel(), y=self.y_p, name="Upper Confidence Band", mode="lines",
             line=dict(dash="dash", color="green")))
         return fig
 
@@ -888,7 +809,6 @@ class StarModel(BaseEstimator):
         y_pred = self.predict(X_pred=X_test)
         mse_test = mean_squared_error(y_pred, y_test)
 
-        # metric = (1 + ICP) * mse_test 
         metric = 1*mse_test + 1*ICP
 
         return np.round(metric, precision)
