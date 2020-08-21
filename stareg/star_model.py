@@ -333,14 +333,14 @@ class StarModel(BaseEstimator):
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self      
         
-    def confidence_interval(self, x, alpha=0.05, bonferroni=True):
+    def confidence_interval(self, X, alpha=0.05, bonferroni=True):
         """Calculate the confidence interval/band for nonparametric regression models.
 
         Based on Fahrmeir, Regression Chap. 8.1.8, p. 470
 
         Parameters
         ----------
-        x : array
+        X : array
             Point/Points to calculate the confidence interval/band for.
         alpha: float
             Confidence level.
@@ -356,20 +356,20 @@ class StarModel(BaseEstimator):
         
         """
 
-        y_p = self.predict(X_pred=x)
+        y_p = self.predict(X=X)
         Z = self.basis
         lambda_k = self.constraint_penalty_matrix
         S = self.calc_hat_matrix()
         
         if bonferroni:
-            m = norm.ppf(1 - alpha/(2*x.shape[0]))
+            m = norm.ppf(1 - alpha/(2*X.shape[0]))
         else:
             m = norm.ppf(1 - alpha/2)
         sigma_hat = np.sqrt(1 / (Z.shape[0] - np.trace(2*S - S @ S.T)) * Z.shape[0] * self.mse)
 
-        z = np.empty((x.shape[0], len(self.coef_)))
+        z = np.empty((X.shape[0], len(self.coef_)))
         for coef_idx in range(len(self.coef_)):
-            z[:,coef_idx] = self.smooths[0].bspline(x=x, knots=self.smooths[0].knots, i=coef_idx, m=2)
+            z[:,coef_idx] = self.smooths[0].bspline(x=X, knots=self.smooths[0].knots, i=coef_idx, m=2)
         
         s_t = z @ np.linalg.inv(Z.T @ Z + lambda_k) @ Z.T
         sqrt_sts = np.sqrt(np.diag(s_t @ s_t.T))
@@ -380,11 +380,11 @@ class StarModel(BaseEstimator):
         return y_m, y_p
 
 
-    def plot_confidence_intervals(self, alpha=0.05, fig=None, y=None, x=None, bonferroni=True):
+    def plot_confidence_intervals(self, alpha=0.05, fig=None, y=None, X=None, bonferroni=True):
         """Plot the confidence intervals into fig. """
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using plot_confidence_intervals()!")
-        y_m, y_p = self.confidence_interval(x=x, alpha=alpha, bonferroni=bonferroni)
+        y_m, y_p = self.confidence_interval(X=X, alpha=alpha, bonferroni=bonferroni)
         fig.add_trace(go.Scatter(
             x=x.ravel(), y=y_m, name="Lower Confidence Band", mode="lines",
             line=dict(dash="dash", color="green")))
@@ -413,10 +413,7 @@ class StarModel(BaseEstimator):
         """
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using plot_cost_function_partition()!")
-        #  smoothness part of the cost function
         S = PenaltyMatrix().smoothness_matrix(n_param=self.smooths[0].n_param)
-        #  lam_s = self.description_dict["s(1)"]["lam"]["smoothness"]
-        #  lam_c = self.description_dict["s(1)"]["lam"]["constraint"]
         J = self.coef_.T @ S.T @ S @ self.coef_
         P = self.smooths[0].penalty_matrix
         J_constr = self.coef_.T @ P.T @ np.diag(check_constraint_full_model(model=self)) @ P @ self.coef_
@@ -502,14 +499,14 @@ class StarModel(BaseEstimator):
         )
         return fig       
 
-    def predict(self, X_pred, extrapol_type="zero", depth=10):
+    def predict(self, X, extrapol_type="zero", depth=10):
         """Prediction of the trained model on the data in X.
         
         Currently only 1-DIMENSIONAL prediction possible !!!
 
         Parameters
         ----------
-        X_pred : np.ndarray
+        X : np.ndarray
             Data of shape (n_samples,) to predict values for.
         extrapol_type: 
             Indiactor of the extrapolation type. 
@@ -525,23 +522,23 @@ class StarModel(BaseEstimator):
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
         y_pred = []
-        for x in X_pred:
+        for x in X:
             if 0 <= x <= 1:
                 y_pred.append(self.smooths[0].spp(
                     sp=x, coef_=self.coef_, knots=self.smooths[0].knots))
             else:
-                y_pred.append(self.extrapolate(x_exp=x, type_=extrapol_type, depth=depth))
+                y_pred.append(self.extrapolate(X=x, type_=extrapol_type, depth=depth))
         y_pred = np.array([y_pred])
         return y_pred.ravel()
 
-    def predict_single_point(self, x_sp):
+    def predict_single_point(self, X):
         """Fast single point prediction.
 
         Currently only 1-DIMENSIONAL prediction possible !!!
 
         Parameter
         ----------
-        x_sp : float
+        X : float
             Single point data.
 
         Returns
@@ -551,16 +548,15 @@ class StarModel(BaseEstimator):
 
         """
 
-        return self.smooths[0].spp(
-            sp=x_sp, coef_=self.coef_, knots=self.smooths[0].knots)
+        return self.smooths[0].spp(sp=X, coef_=self.coef_, knots=self.smooths[0].knots)
 
 
-    def extrapolate(self, x_exp, type_="constant", depth=10):
-        """ Evaluate the extrapolation value for the given x_exp. 
+    def extrapolate(self, X, type_="constant", depth=10):
+        """ Evaluate the extrapolation value for the given X. 
 
         Parameters
         ----------
-        x_exp : array
+        X : array
             Data to calculate the extrapolation for.
         type_ : str
             Describes the extrapolation type, either "constant", "linear", "zero".
@@ -576,25 +572,25 @@ class StarModel(BaseEstimator):
 
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using extrapolate()!")
         assert (type_ in ["constant", "linear", "zero"]), f"Typ_ '{type_}' not supported!"
-        direction = "left" if x_exp < 0 else "right"
+        direction = "left" if X < 0 else "right"
         if direction == "left" and type_ in ["constant", "linear"]:
             #print("left + const/lin")
-            y_boundary = self.predict_single_point(x_sp=0)
+            y_boundary = self.predict_single_point(X=0)
             k = np.mean(self.coef_[:depth])
         elif direction == "right" and type_ in ["constant", "linear"]:
             #print("right + const/lin")
-            y_boundary = self.predict_single_point(x_sp=1)
+            y_boundary = self.predict_single_point(X=1)
             k = np.mean(self.coef_[-depth:])
 
         if type_ == "constant":
             y_extrapolate = y_boundary
         elif type_ == "linear":
-            dx = x_exp-1 if x_exp > 0 else np.abs(x_exp)
+            dx = X-1 if X > 0 else np.abs(X)
             y_extrapolate = y_boundary + dx * k
         elif type_ == "zero" and direction == "left":
-            y_extrapolate = self.predict_single_point(0) * np.exp(-(x_exp - 0)**2 / (1/depth))
+            y_extrapolate = self.predict_single_point(0) * np.exp(-(X - 0)**2 / (1/depth))
         elif type_ == "zero" and direction == "right":
-            y_extrapolate = self.predict_single_point(1) * np.exp(-(x_exp - 1)**2 / (1/depth))
+            y_extrapolate = self.predict_single_point(1) * np.exp(-(X - 1)**2 / (1/depth))
         else:
             return
 
@@ -705,7 +701,6 @@ class StarModel(BaseEstimator):
 
         """
 
-
         X, y = check_X_y(X=X, y=y)
         grid = self.generate_GCV_parameter_list(n_grid=n_grid, p_min=p_min)
         gcv_scores, violated_constraints_list = [], []
@@ -780,16 +775,14 @@ class StarModel(BaseEstimator):
             descr_dict[s]["lam"][t] = params[k]
         self.description_dict = descr_dict
 
-
-
-    def eval_metric(self, X_test=None, y_test=None, precision=5):
+    def eval_metric(self, X=None, y=None, precision=5):
         """Evaulate the metric M = MSE_prediction + ICP. 
         
         ICP = Invalid Constraint percentage. 
         
         Parameters
         ----------
-        X_test : array
+        X : array
             Data to calculate the prediction MSE for.
         y_test : arrray
             Data to calculate the prediciton MSE for.
@@ -806,9 +799,35 @@ class StarModel(BaseEstimator):
         test = test_model_against_constraint(model=self, plot_=False)
         ICP = test.sum() / len(test)
         
-        y_pred = self.predict(X_pred=X_test)
-        mse_test = mean_squared_error(y_pred, y_test)
+        y_pred = self.predict(X=X)
+        mse_test = mean_squared_error(y_pred, y)
 
         metric = 1*mse_test + 1*ICP
-
         return np.round(metric, precision)
+
+    def describe_data(self, X, y, col_names=False):
+        """R like description of the dataset.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Data of size (n_samples, n_dim).
+        y : array
+            Target data of size (n_samples, ).
+        col_names : list
+            Optional, List of column names. 
+
+        Returns
+        -------
+        df.describe : pd.DataFrame
+            Returns the description of the dataset.
+
+        """
+        
+        X = np.c_[X, y]
+        df = pd.DataFrame(data={f"x{i}": X[:,i] for i in range(X.shape[1])})
+        if col_names:
+            df.columns = col_names
+        else:
+            df.rename(columns={f"x{X.shape[1]-1}":"y"})
+        return df.describe()
