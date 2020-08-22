@@ -3,6 +3,7 @@
 
 
 import plotly.graph_objects as go
+
 import numpy as np
 import pandas as pd
 import pprint
@@ -10,12 +11,14 @@ import copy
 from numpy.linalg import lstsq
 from scipy.linalg import block_diag
 from scipy.signal import find_peaks
-from scipy.stats import t, norm
+from scipy.stats import t, norm, probplot
 from sklearn.metrics import mean_squared_error
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_X_y 
 from sklearn.utils.validation import check_is_fitted
 from sklearn.model_selection import ParameterGrid
+from plotly.subplots import make_subplots
+from statsmodels.nonparametric.smoothers_lowess import lowess
 
 from .smooth import Smooths as s
 from .smooth import TensorProductSmooths as tps
@@ -386,10 +389,10 @@ class StarModel(BaseEstimator):
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using plot_confidence_intervals()!")
         y_m, y_p = self.confidence_interval(X=X, alpha=alpha, bonferroni=bonferroni)
         fig.add_trace(go.Scatter(
-            x=x.ravel(), y=y_m, name="Lower Confidence Band", mode="lines",
+            x=X.ravel(), y=y_m, name="Lower Confidence Band", mode="lines",
             line=dict(dash="dash", color="green")))
         fig.add_trace(go.Scatter(
-            x=x.ravel(), y=self.y_p, name="Upper Confidence Band", mode="lines",
+            x=X.ravel(), y=self.y_p, name="Upper Confidence Band", mode="lines",
             line=dict(dash="dash", color="green")))
         return fig
 
@@ -823,7 +826,7 @@ class StarModel(BaseEstimator):
             Returns the description of the dataset.
 
         """
-        
+
         X = np.c_[X, y]
         df = pd.DataFrame(data={f"x{i}": X[:,i] for i in range(X.shape[1])})
         if col_names:
@@ -831,3 +834,74 @@ class StarModel(BaseEstimator):
         else:
             df.rename(columns={f"x{X.shape[1]-1}":"y"})
         return df.describe()
+
+    def plot_diagosticPlots(self, y=None, fname=False):
+        fitted = self.basis @ self.coef_
+        residuals = y.ravel() - fitted
+        # hat matrix
+        H = self.calc_hat_matrix()
+        # estimated variance
+        sigma_hat = np.sqrt(1 / (self.basis.shape[0] - np.trace(2*H - H @ H.T)) * self.basis.shape[0] * self.mse)
+        # standardized residual
+        residual_std = residuals / (sigma_hat * np.sqrt(1 - np.diag(H)))
+        sqr_residual_std = np.sqrt(np.abs(residual_std))
+        # quantile
+        osm, osr = probplot(residual_std, dist="norm")
+        # Cooks distance
+        CD = residuals**2 / (np.trace(H) * self.mse) * (np.diag(H) / (1 - np.diag(H))**2)
+        # high leverage points
+        high_leverage_points = 2 *(np.trace(H) + 1) / len(fitted) < np.diag(H)
+        # high influence points
+        high_influence_points = 4 / (len(fitted) - np.trace(H) -1) < CD
+
+        res_fit_1 = lowess(exog=fitted, endog=residuals, return_sorted=True)
+        res_fit_2 = lowess(exog=fitted, endog=sqr_residual_std, return_sorted=True)
+        res_fit_3 = lowess(exog=np.diag(H), endog=residual_std, frac=0.8, return_sorted=True)
+
+        fig = make_subplots(rows=3, cols=2, 
+                        subplot_titles=["Residual vs. Fitted", "Scale-Location", "Q-Q Normal", "Residual vs. Leverage", "Cook's Distance"],
+                        column_widths=[0.5, 0.5], row_heights=[0.5, 0.5, 0.5], horizontal_spacing=0.15, vertical_spacing=0.15,
+                            specs=[[{}, {}], [{}, {}], [{"colspan": 2}, None]])
+
+        fig.add_trace(go.Scatter(x=fitted, y=residuals, mode="markers", marker=dict(color="royalblue")), row=1, col=1)
+        fig.add_trace(go.Scatter(x=res_fit_1[:,0], y=res_fit_1[:,1], mode="lines", line=dict(dash="dash", color="red")), row=1, col=1)
+
+        fig.add_trace(go.Scatter(x=fitted, y=sqr_residual_std, mode="markers", marker=dict(color="royalblue")), row=1,col=2)
+        fig.add_trace(go.Scatter(x=res_fit_2[:,0], y=res_fit_2[:,1], mode="lines", line=dict(dash="dash", color="red")),row=1,col=2)
+
+        fig.add_trace(go.Scatter(x=osm[0], y=osm[1], mode="markers", marker=dict(color="royalblue")), row=2, col=1)
+        fig.add_trace(go.Scatter(x=[osm[0].min(), osm[0].max()], y=[osm[0].min(), osm[0].max()], mode="lines", line=dict(color="grey", dash="dash")), row=2, col=1)
+
+        fig.add_trace(go.Scatter(x=np.diag(H), y=residual_std, mode="markers", marker=dict(color="royalblue")), row=2, col=2)
+        fig.add_trace(go.Scatter(x=res_fit_3[:,0], y=res_fit_3[:,1], mode="lines", line=dict(color="red", dash="dash")), row=2, col=2)
+
+        # plot high leverage points
+        fig.add_trace(go.Scatter(x=np.diag(H)[high_leverage_points], y=residual_std[high_leverage_points], name="High Leverage Points", 
+                                mode="markers+text", marker=dict(symbol="circle-open", color="black", size=12), 
+                                text=list(map(str, list(np.argwhere(high_leverage_points).ravel()))), textposition="bottom center"), row=2, col=2)
+        fig.add_trace(go.Scatter(x=[-0.05, np.diag(H).max()*1.2], y=[0,0], mode="lines", line=dict(color="grey", dash="dash", width=1)), row=2, col=2)
+        fig.add_trace(go.Scatter(x=[0, 0], y=[residual_std.min(), residual_std.max()*1.2], mode="lines", line=dict(color="grey", dash="dash", width=1)), row=2, col=2)
+        # plot Cooks distance 
+        fig.add_trace(go.Scatter(x=np.arange(len(fitted)), y=CD, name="Cook's distance", mode="markers", marker=dict(symbol="x", color="royalblue")), row=3, col=1)
+        fig.add_trace(go.Scatter(x=(np.arange(len(fitted)))[high_influence_points], y=CD[high_influence_points], mode="markers+text", 
+                                marker=dict(symbol="circle-open", color="black", size=12), 
+                                text=list(map(str, np.argwhere(high_influence_points).ravel())), textposition="top center"), row=3, col=1)
+
+        
+        fig.update_xaxes(title_text="Fitted values", row=1, col=1)
+        fig.update_xaxes(title_text="Fitted values", row=1, col=2)
+        fig.update_xaxes(title_text="Theoretical quantiles", row=2, col=1)
+        fig.update_xaxes(title_text="Leverage", row=2, col=2,range=[-0.05, np.diag(H).max()*1.2])
+        fig.update_xaxes(title_text="Obs. number", row=3, col=1)
+
+        fig.update_yaxes(title_text="Residual", row=1, col=1)
+        fig.update_yaxes(title_text="sqrt(standardized residuals)", row=1, col=2)
+        fig.update_yaxes(title_text="Standardized residual", row=2, col=1)
+        fig.update_yaxes(title_text="Standardized residual", row=2, col=2, range=[1.2*residual_std.min(), 1.2*residual_std.max()])
+        fig.update_yaxes(title_text="Cook's distance", row=3, col=1, range=[-0., 1.2*CD.max()])
+        
+        fig.update_layout(height=1000, width=1000, title_text="Diagnostic Plots", showlegend=False)
+        
+        if fname:
+            fig.write_image(fname+".pdf")
+        fig.show()
