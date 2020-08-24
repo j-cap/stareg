@@ -2,16 +2,16 @@
 # coding: utf-8
 
 
-import plotly.graph_objects as go
 
-import numpy as np
-import pandas as pd
 import pprint
 import copy
+import plotly.graph_objects as go
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
 from numpy.linalg import lstsq
 from scipy.linalg import block_diag
-from scipy.signal import find_peaks
-from scipy.stats import t, norm, probplot
+from scipy.stats import norm, probplot
 from sklearn.metrics import mean_squared_error
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_X_y 
@@ -121,8 +121,7 @@ class StarModel(BaseEstimator):
                 )    
         
         self.basis = np.concatenate([smooth.basis for smooth in self.smooths], axis=1) 
-        self.smoothness_penalty_list = [
-            s.lam["smoothness"] * s.smoothness_matrix(n_param=s.n_param).T @ s.smoothness_matrix(n_param=s.n_param) for s in self.smooths]
+        self.smoothness_penalty_list = [s.lam["smoothness"] * s.smoothness for s in self.smooths]
         #  self.smoothness_penalty_matrix is already lambda * S.T @ S
         self.smoothness_penalty_matrix = block_diag(*self.smoothness_penalty_list)
 
@@ -248,7 +247,7 @@ class StarModel(BaseEstimator):
         self = self.calc_LS_fit(X=X, y=y)
         df = self.create_df_for_beta(beta_init=self.coef_)
         
-        for _ in range(max_iter):
+        for i in range(max_iter):
             self.create_constraint_penalty_matrix(beta_test=self.coef_)
             DVD = self.constraint_penalty_matrix
             DD = self.smoothness_penalty_matrix
@@ -257,7 +256,7 @@ class StarModel(BaseEstimator):
             beta_new = (np.linalg.pinv(BB + DD + DVD) @ By).ravel()
             self.coef_ = beta_new                       
             v_new = check_constraint_full_model(model=self)
-            df = df.append(pd.DataFrame(data=beta_new.reshape(1,-1), columns=df.columns))
+            df.loc[i+1] = self.coef_
             delta_v = np.sum(v_new - v_old)
             #  change the criteria to the following: 
             #  print("Differences at the following coefficients: ", np.argwhere(v_old != v_new))
@@ -271,7 +270,7 @@ class StarModel(BaseEstimator):
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self
 
-    def weighted_fit(self, X, y, critical_point=None, plot_=True, max_iter=5):
+    def weighted_fit(self, X, y, critical_point=None, plot_=True, max_iter=5, weights=1000):
         """Calculate a weighted PIRLS fit that goes through the critical point. 
 
         Parameters
@@ -285,7 +284,9 @@ class StarModel(BaseEstimator):
         plot_ : boolean
             Indicatior whether to plot the results.
         critical_point: array
-            Critical points for the weighted fit. More than one are allowed.
+            Critical points for the weighted fit. Shape = (n_critical_points, n_dimensions + 1)
+        weights : int
+            Weight for the weighte least squares.
 
         Returns 
         -------
@@ -293,25 +294,14 @@ class StarModel(BaseEstimator):
             Returns the fitted model.        
 
         """
-        assert (X.shape[1] == 1), "Only 1-d fits currently possible!"
-        if critical_point is None:
-            print("Insert a critical point!")
-            return None
-        x = X
-        w = np.ones(x.shape[0]+len(critical_point))
-        for cp in critical_point:
-            x = np.append(x, cp[0])
-            x.sort()
-            idx_x = np.where(x == cp[0])[0][0]
-            y = np.insert(arr=y, obj=idx_x, values=cp[1])
 
-            w[idx_x] = 1000
-            print("w[idx_x_new] = ", w[idx_x])
-    
-        x, y = x.reshape(-1,1), y.ravel()
-        w = np.diag(w)
+        assert (X.shape[1] == critical_point.shape[1]-1), "Dimension not compatible"
+        X_new = np.vstack((X, critical_point[:, :-1]))
+        y_new = np.append(y, critical_point[:, -1])
+        w = np.ones(X_new.shape[0])
+        w[:critical_point.shape[0]] = weights
 
-        X, y = check_X_y(x, y.ravel())
+        X, y = check_X_y(X_new, y_new.ravel())
         self = self.calc_LS_fit(X=X, y=y)
         df = self.create_df_for_beta(beta_init=self.coef_)
         
@@ -319,7 +309,7 @@ class StarModel(BaseEstimator):
             self.create_constraint_penalty_matrix(beta_test=self.coef_)
             DVD = self.constraint_penalty_matrix
             DD = self.smoothness_penalty_matrix
-            BwB, Bwy = self.basis.T @ w @ self.basis, self.basis.T @ (np.diag(w) * y)
+            BwB, Bwy = self.basis.T @ np.diag(w) @ self.basis, self.basis.T @ (w * y)
             v_old = check_constraint_full_model(model=self)
             beta_new = (np.linalg.pinv(BwB + DD + DVD) @ Bwy).ravel()
             v_new = check_constraint_full_model(model=self)
@@ -336,6 +326,109 @@ class StarModel(BaseEstimator):
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self      
         
+    def predict(self, X, extrapol_type="zero", depth=10):
+        """Prediction of the trained model on the data in X.
+        
+        Parameters
+        ----------
+        X : np.ndarray
+            Data of shape (n_samples,) to predict values for.
+        extrapol_type: 
+            Indiactor of the extrapolation type. 
+        depth : int
+            Indicates how many coefficients are used for the linear extrapolation.
+
+        Returns
+        -------
+        pred : array
+            Returns the predicted values. 
+ 
+        """
+
+        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
+        y_pred = []
+        for x in X:
+            if np.all(x) >= 0 and np.all(x <= 1):
+                pred = []
+                for idx, s in enumerate(self.smooths_list):
+                    if s.startswith("s"):
+                        pred.append(self.smooths[idx].spp(sp=x[int(s[2])-1], coef_=self.coef_[self.coef_list[idx]:self.coef_list[idx+1]]))
+                    elif s.startswith("t"):
+                        pred.append(self.smooths[idx].spp(sp=x[int(s[2])-1:int(s[4])], coef_=self.coef_[self.coef_list[idx]:self.coef_list[idx+1]]))
+                y_pred.append(sum(pred))
+            else:
+                y_pred.append(self.extrapolate(X=x, type_=extrapol_type, depth=depth))
+        y_pred = np.array([y_pred])
+        return y_pred.ravel()
+
+    def predict_single_point(self, X):
+        """Fast single point prediction.
+
+        Parameter
+        ----------
+        X : float
+            Single point data.
+
+        Returns
+        -------
+        y_sp : float
+            Predicted value.
+
+        """
+        y_pred = []
+        for idx, s in enumerate(self.smooths_list):
+            if s.startswith("s"):
+                y_pred.append(self.smooths[idx].spp(sp=X[int(s[2])-1], coef_=self.coef_[self.coef_list[idx]:self.coef_list[idx+1]]))
+            elif s.startswith("t"):
+                y_pred.append(self.smooths[idx].spp(sp=X[int(s[2])-1:int(s[4])], coef_=self.coef_[self.coef_list[idx]:self.coef_list[idx+1]]))
+        return sum(y_pred)
+
+
+    def extrapolate(self, X, type_="constant", depth=10):
+        """ Evaluate the extrapolation value for the given X. 
+
+        Parameters
+        ----------
+        X : array
+            Datapoint to calculate the extrapolation for, shape = (n_dim, )
+        type_ : str
+            Describes the extrapolation type, either "constant", "linear", "zero".
+        depth : int
+            Describes how many coefficients are taken into account for the linear extrapolation.
+
+        Returns
+        -------
+        y_extrapolate : array
+            Extrapolation value.
+
+        """
+
+        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using extrapolate()!")
+        assert (type_ in ["constant", "linear", "zero"]), f"Typ_ '{type_}' not supported!"
+        direction = "left" if np.any(X) < 0 else "right"
+        if direction == "left" and type_ in ["constant", "linear"]:
+            #print("left + const/lin")
+            y_boundary = self.predict_single_point(X=np.zeros(len(X)))
+            k = np.mean(self.coef_[:depth])
+        elif direction == "right" and type_ in ["constant", "linear"]:
+            #print("right + const/lin")
+            y_boundary = self.predict_single_point(X=np.ones(len(X)))
+            k = np.mean(self.coef_[-depth:])
+
+        if type_ == "constant":
+            y_extrapolate = y_boundary
+        elif type_ == "linear":
+            dx = X-1 if X > 0 else np.abs(X)
+            y_extrapolate = y_boundary + dx * k
+        elif type_ == "zero" and direction == "left":
+            y_extrapolate = self.predict_single_point(np.zeros(len(X))) * np.exp(-(X - 0)**2 / (1/depth))
+        elif type_ == "zero" and direction == "right":
+            y_extrapolate = self.predict_single_point(np.ones(len(X))) * np.exp(-(X - 1)**2 / (1/depth))
+        else:
+            return
+
+        return y_extrapolate
+
     def confidence_interval(self, X, alpha=0.05, bonferroni=True):
         """Calculate the confidence interval/band for nonparametric regression models.
 
@@ -392,7 +485,7 @@ class StarModel(BaseEstimator):
             x=X.ravel(), y=y_m, name="Lower Confidence Band", mode="lines",
             line=dict(dash="dash", color="green")))
         fig.add_trace(go.Scatter(
-            x=X.ravel(), y=self.y_p, name="Upper Confidence Band", mode="lines",
+            x=X.ravel(), y=y_p, name="Upper Confidence Band", mode="lines",
             line=dict(dash="dash", color="green")))
         return fig
 
@@ -502,102 +595,7 @@ class StarModel(BaseEstimator):
         )
         return fig       
 
-    def predict(self, X, extrapol_type="zero", depth=10):
-        """Prediction of the trained model on the data in X.
-        
-        Currently only 1-DIMENSIONAL prediction possible !!!
 
-        Parameters
-        ----------
-        X : np.ndarray
-            Data of shape (n_samples,) to predict values for.
-        extrapol_type: 
-            Indiactor of the extrapolation type. 
-        depth : int
-            Indicates how many coefficients are used for the linear extrapolation.
-
-        Returns
-        -------
-        pred : array
-            Returns the predicted values. 
- 
-        """
-
-        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
-        y_pred = []
-        for x in X:
-            if 0 <= x <= 1:
-                y_pred.append(self.smooths[0].spp(
-                    sp=x, coef_=self.coef_, knots=self.smooths[0].knots))
-            else:
-                y_pred.append(self.extrapolate(X=x, type_=extrapol_type, depth=depth))
-        y_pred = np.array([y_pred])
-        return y_pred.ravel()
-
-    def predict_single_point(self, X):
-        """Fast single point prediction.
-
-        Currently only 1-DIMENSIONAL prediction possible !!!
-
-        Parameter
-        ----------
-        X : float
-            Single point data.
-
-        Returns
-        -------
-        y_sp : float
-            Predicted value.
-
-        """
-
-        return self.smooths[0].spp(sp=X, coef_=self.coef_, knots=self.smooths[0].knots)
-
-
-    def extrapolate(self, X, type_="constant", depth=10):
-        """ Evaluate the extrapolation value for the given X. 
-
-        Parameters
-        ----------
-        X : array
-            Data to calculate the extrapolation for.
-        type_ : str
-            Describes the extrapolation type, either "constant", "linear", "zero".
-        depth : int
-            Describes how many coefficients are taken into account for the linear extrapolation.
-
-        Returns
-        -------
-        y_extrapolate : array
-            Extrapolation value.
-
-        """
-
-        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using extrapolate()!")
-        assert (type_ in ["constant", "linear", "zero"]), f"Typ_ '{type_}' not supported!"
-        direction = "left" if X < 0 else "right"
-        if direction == "left" and type_ in ["constant", "linear"]:
-            #print("left + const/lin")
-            y_boundary = self.predict_single_point(X=0)
-            k = np.mean(self.coef_[:depth])
-        elif direction == "right" and type_ in ["constant", "linear"]:
-            #print("right + const/lin")
-            y_boundary = self.predict_single_point(X=1)
-            k = np.mean(self.coef_[-depth:])
-
-        if type_ == "constant":
-            y_extrapolate = y_boundary
-        elif type_ == "linear":
-            dx = X-1 if X > 0 else np.abs(X)
-            y_extrapolate = y_boundary + dx * k
-        elif type_ == "zero" and direction == "left":
-            y_extrapolate = self.predict_single_point(0) * np.exp(-(X - 0)**2 / (1/depth))
-        elif type_ == "zero" and direction == "right":
-            y_extrapolate = self.predict_single_point(1) * np.exp(-(X - 1)**2 / (1/depth))
-        else:
-            return
-
-        return y_extrapolate
 
     def calc_hat_matrix(self):
         """Calculates the hat matrix (influence matrix) of the fitted model.
@@ -707,7 +705,7 @@ class StarModel(BaseEstimator):
         X, y = check_X_y(X=X, y=y)
         grid = self.generate_GCV_parameter_list(n_grid=n_grid, p_min=p_min)
         gcv_scores, violated_constraints_list = [], []
-        for params in grid:
+        for params in tqdm(grid):
             for k,v in params.items():
                 for k2 in self.description_dict.keys():
                     if k[:k.find("_")] == k2:

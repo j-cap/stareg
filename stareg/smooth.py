@@ -20,7 +20,7 @@ class Smooths(Bspline):
         n_param : int
             Number of B-Splines to use for the basis.
         constraint : str
-            Type of constraint, one of {"smooth", "inc", "dec", "conv", "conc", "peak", "valley"}.
+            Type of constraint, one of {inc", "dec", "conv", "conc", "peak", "valley"}.
         y_peak_or_valley : array 
             Response variable of shape (n_samples, ) values to search for the peak or valley, respectively. 
         lambdas : dict
@@ -39,6 +39,7 @@ class Smooths(Bspline):
             self.lam = lambdas
         self.knot_type = type_
         self.bspline_basis(x_data=self.x_data, k=self.n_param, type_=type_)
+        self.smoothness = self.smoothness_matrix(n_param=self.n_param).T @ self.smoothness_matrix(n_param=self.n_param)
         # Create the penalty matrix for the given penalty
         if constraint == "inc":
             self.penalty_matrix = self.d1_difference_matrix(n_param=self.n_param)
@@ -48,8 +49,6 @@ class Smooths(Bspline):
             self.penalty_matrix = self.d2_difference_matrix(n_param=self.n_param)
         elif constraint == "conc":
             self.penalty_matrix = -1 * self.d2_difference_matrix(n_param=self.n_param)
-        elif constraint == "smooth":
-            self.penalty_matrix = self.smoothness_matrix(n_param=self.n_param)
         elif constraint == "peak":
             assert (y_peak_or_valley is not None), self.msg_include_ydata
             self.penalty_matrix = self.peak_matrix(
@@ -75,6 +74,8 @@ class Smooths(Bspline):
             self.penalty_matrix = self.multi_extremum_matrix(
                 n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
             )
+        elif constraint == "NoConstraint":
+            self.penalty_matrix = np.zeros((self.n_param, self.n_param))
         else:
             print(f"Penalty {constraint} not implemented!")
 
@@ -92,7 +93,7 @@ class TensorProductSmooths(TensorProductSpline):
         n_param : tuple
             Number of B-Splines to use for each basis.
         constraint : str
-            Type of constraint, one of {"smooth", "inc", "dec", "conv", "conc", "peak", "valley"}.
+            Type of constraint, one of {"smooth"}.
         lambdas : dict
             Smoothing parameter value for the smoothnes and constraint penalty, e.g. {"smoothness": 1, "constraint": 1000}.
         type_   : str
@@ -114,11 +115,20 @@ class TensorProductSmooths(TensorProductSpline):
         self.knot_type = type_
         self.tensor_product_spline_2d_basis(x_data=self.x_data, k1=n_param[0], k2=n_param[1], type_=type_)
         # Create the penalty matrix for the given penalty
-        if constraint == "smooth":
-            print("--- NOT FINISHED ---")
-            self.penalty_matrix = np.zeros((np.prod(n_param)-2, np.prod(n_param)))
+
+        # create smoothness matrix according to Fahrmeir, p. 508
+        K1 = self.smoothness_matrix(n_param=self.n_param[0]).T @ self.smoothness_matrix(n_param=self.n_param[0])
+        K2 = self.smoothness_matrix(n_param=self.n_param[1]).T @ self.smoothness_matrix(n_param=self.n_param[1])  
+        self.smoothness = np.kron(np.eye(self.n_param[1]), K1) + np.kron(K2, np.eye(self.n_param[0]))
+
+        # TODO: implement the constraints
+        if constraint == "NoConstraint":
+            self.penalty_matrix = np.zeros((np.prod(self.n_param), np.prod(self.n_param)))
+        elif constraint == "smooth":
+            self.penalty_matrix = np.zeros((np.prod(self.n_param)-2, np.prod(self.n_param)))
         else:
-            print("--- NOT FINISHED ---")
+            self.penalty_matrix = np.zeros((np.prod(self.n_param), np.prod(self.n_param)))
+            print("--- Constraint NOT FINISHED ---")
             print(f"Penalty {constraint} not implemented!")
         
 

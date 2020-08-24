@@ -47,4 +47,34 @@ class TensorProductSpline(Bspline, PenaltyMatrix):
         X = np.zeros((self.x1.shape[0], self.basis_x1.shape[1]*self.basis_x2.shape[1]))
         for i in range(X.shape[0]):
             X[i,:] = np.kron(self.basis_x1[i,:], self.basis_x2[i,:])
+
         self.basis = X
+        self.knots_x1 = bspline_x1.knots 
+        self.knots_x2 = bspline_x2.knots 
+
+
+    def spp(self, sp=0, coef_=None):
+        """Calculate the single point prediction for TP-splines given the coefficients. 
+
+        Parameters
+        ----------
+        sp : float
+            Single point to calculate the prediction for, shape (1, 2)
+        coef_ : np.array
+            Calculated coefficients for the TP-splines.
+        knots : np.array
+            Knot sequence. 
+
+        Returns
+        -------
+        p : np.float
+            Predicted value. 
+
+        """
+
+        s1, s2 = [], []
+        for i in range(int(np.sqrt(len(coef_)))):
+            s1.append(self.bspline(x=sp[0], knots=self.knots_x1, i=i, m=2))
+            s2.append(self.bspline(x=sp[1], knots=self.knots_x2, i=i, m=2))
+        p = np.kron(s1, s2) @ coef_
+        return p

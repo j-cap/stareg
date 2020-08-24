@@ -106,7 +106,7 @@ class Bspline(PenaltyMatrix):
         self.knot_type = type_
         self.n_param = int(X.shape[1])
     
-    def spp(self, sp=0, coef_=None, knots=None):
+    def spp(self, sp=0, coef_=None):
         """Calculate the single point prediction for B-splines given the coefficients. 
 
         Parameters
@@ -115,8 +115,6 @@ class Bspline(PenaltyMatrix):
             Single point to calculate the prediction for.
         coef_ : np.array
             Calculated coefficients for the B-splines.
-        knots : np.array
-            Knot sequence. 
 
         Returns
         -------
@@ -124,14 +122,13 @@ class Bspline(PenaltyMatrix):
             Predicted value. 
 
         """
-
         if sp != 1:
-            idx = np.argwhere(knots > sp)[0][0]
+            idx = np.argwhere(self.knots > sp)[0][0]
         else:
-            idx = np.argwhere(knots >= sp)[0][0]
+            idx = np.argwhere(self.knots >= sp)[0][0]
         s = []
-        [s.append(self.bspline(x=sp, knots=knots[idx-4:idx+4], i=i, m=2)) for i in range(4)]
-        return sum(s * coef_[idx-4:idx])                    
+        [s.append(self.bspline(x=sp, knots=self.knots[idx-4:idx+4], i=i, m=2)) for i in range(4)]
+        return sum(s * coef_[idx-4:idx])            
 
     def plot_basis(self, title=""):
         """Plot the B-spline basis matrix and the knot loactions.
