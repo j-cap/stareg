@@ -159,8 +159,9 @@ class StarModel(BaseEstimator):
         for idx, smooth in enumerate(self.smooths):
             b = beta_test[self.coef_list[idx]:self.coef_list[idx+1]]
             P = smooth.penalty_matrix
-            V = check_constraint(beta=b, constraint=smooth.constraint)
-            self.constraint_penalty_list.append(smooth.lam["constraint"] * P.T @ V @ P )
+            V = check_constraint(beta=b, constraint=smooth.constraint, smooth_type=type(smooth))
+            # there can be complex values when using TPS constraints -> cast to float
+            self.constraint_penalty_list.append(smooth.lam["constraint"] * (P.real.T @ V @ P.real))
         #  self.constraint_penalty_matrix is already lambda P.T @ V @ P.T
         self.constraint_penalty_matrix = block_diag(*self.constraint_penalty_list)
     
@@ -797,7 +798,7 @@ class StarModel(BaseEstimator):
 
         """
 
-        test = test_model_against_constraint(model=self, plot_=False)
+        test = test_model_against_constraint(model=self, plot_=False, dim=X.shape[1])
         ICP = test.sum() / len(test)
         
         y_pred = self.predict(X=X)

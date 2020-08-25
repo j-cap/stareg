@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import numpy as np
+from scipy.linalg import sqrtm
 
 from .bspline import Bspline
 from .tensorproductspline import TensorProductSpline
@@ -124,6 +125,13 @@ class TensorProductSmooths(TensorProductSpline):
         # TODO: implement the constraints
         if constraint == "NoConstraint":
             self.penalty_matrix = np.zeros((np.prod(self.n_param), np.prod(self.n_param)))
+        elif constraint == "inc":
+            #  according to Fahrmeir, p. 508
+            P1 = self.d1_difference_matrix(n_param=self.n_param[0])
+            P2 = self.d1_difference_matrix(n_param=self.n_param[1])
+            K1, K2 = P1.T @ P1, P2.T @ P2
+            K = np.kron(np.eye(self.n_param[1]), K1) + np.kron(K2, np.eye(self.n_param[0]))
+            self.penalty_matrix = sqrtm(K)
         elif constraint == "smooth":
             self.penalty_matrix = np.zeros((np.prod(self.n_param)-2, np.prod(self.n_param)))
         else:
