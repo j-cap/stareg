@@ -296,11 +296,12 @@ class StarModel(BaseEstimator):
 
         """
 
-        assert (X.shape[1] == critical_point.shape[1]-1), "Dimension not compatible"
+        # assert (X.shape[1] == critical_point.shape[1]-1), "Dimension not compatible"
         X_new = np.vstack((X, critical_point[:, :-1]))
         y_new = np.append(y, critical_point[:, -1])
         w = np.ones(X_new.shape[0])
-        w[:critical_point.shape[0]] = weights
+        # w[:critical_point.shape[0]] = weights
+        w[-1*critical_point.shape[0]:] = weights
 
         X, y = check_X_y(X_new, y_new.ravel())
         self = self.calc_LS_fit(X=X, y=y)
@@ -345,11 +346,10 @@ class StarModel(BaseEstimator):
             Returns the predicted values. 
  
         """
-
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
         y_pred = []
         for x in X:
-            if np.all(x) >= 0 and np.all(x <= 1):
+            if np.all(x >= 0) and np.all(x <= 1):
                 pred = []
                 for idx, s in enumerate(self.smooths_list):
                     if s.startswith("s"):
@@ -404,9 +404,13 @@ class StarModel(BaseEstimator):
 
         """
 
+        #  TODO: 
+        #  [ ] - linear extrapolation in 2D
+        #  [ ] - constant interpolation in 2D
+
         check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using extrapolate()!")
         assert (type_ in ["constant", "linear", "zero"]), f"Typ_ '{type_}' not supported!"
-        direction = "left" if np.any(X) < 0 else "right"
+        direction = "left" if np.any(X < 0) else "right"
         if direction == "left" and type_ in ["constant", "linear"]:
             #print("left + const/lin")
             y_boundary = self.predict_single_point(X=np.zeros(len(X)))
@@ -428,12 +432,14 @@ class StarModel(BaseEstimator):
         else:
             return
 
-        return y_extrapolate
+        return y_extrapolate[0]
 
     def confidence_interval(self, X, alpha=0.05, bonferroni=True):
         """Calculate the confidence interval/band for nonparametric regression models.
 
-        Based on Fahrmeir, Regression Chap. 8.1.8, p. 470
+        Based on Fahrmeir, Regression Chap. 8.1.8, p. 470. 
+        Currently, only available for one dimension, even when the fit is multi-dimensional and
+        only when the first dimenions is choose as smooth. 
 
         Parameters
         ----------
@@ -466,7 +472,7 @@ class StarModel(BaseEstimator):
 
         z = np.empty((X.shape[0], len(self.coef_)))
         for coef_idx in range(len(self.coef_)):
-            z[:,coef_idx] = self.smooths[0].bspline(x=X, knots=self.smooths[0].knots, i=coef_idx, m=2)
+            z[:,coef_idx] = self.smooths[0].bspline(x=X.ravel(), knots=self.smooths[0].knots, i=coef_idx, m=2)
         
         s_t = z @ np.linalg.inv(Z.T @ Z + lambda_k) @ Z.T
         sqrt_sts = np.sqrt(np.diag(s_t @ s_t.T))

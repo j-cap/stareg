@@ -127,7 +127,7 @@ class Bspline(PenaltyMatrix):
         else:
             idx = np.argwhere(self.knots >= sp)[0][0]
         s = []
-        [s.append(self.bspline(x=sp, knots=self.knots[idx-4:idx+4], i=i, m=2)) for i in range(4)]
+        [s.append(self.bspline(x=float(sp), knots=self.knots[idx-4:idx+4], i=i, m=2)) for i in range(4)]
         return sum(s * coef_[idx-4:idx])            
 
     def plot_basis(self, title=""):

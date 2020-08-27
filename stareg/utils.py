@@ -55,6 +55,8 @@ def check_constraint(beta, constraint, smooth_type="spline"):
             v = check_constraint_inc_tps(beta=beta)
         elif constraint == "dec":
             v = check_constraint_dec_tps(beta=beta)
+        elif constraint == "smooth":
+            v = np.ones(len(beta)-2)
         else:
             print(f"Constraint {constraint} not implemented for TPS")
             return
