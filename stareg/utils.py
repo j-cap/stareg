@@ -248,11 +248,15 @@ def check_constraint_full_model(model):
     assert (model.coef_ is not None), "Please run Model.fit(X, y) first!"
     v = []
 
-    for i, smooth in enumerate(model.smooths):
-        beta = model.coef_[model.coef_list[i]:model.coef_list[i+1]]
-        constraint = smooth.constraint
-        V = check_constraint(beta, constraint=constraint, smooth_type=type(smooth))
-        v += list(np.diag(V))
+    #for i, smooth in enumerate(model.smooths):
+    #    beta = model.coef_[model.coef_list[i]:model.coef_list[i+1]]
+    #    constraint = smooth.constraint
+    #    V = check_constraint(beta, constraint=constraint, smooth_type=type(smooth))
+    #    v += list(np.diag(V))
+    # change to dict
+    for val in model.smooths.values():
+        V = check_constraint(val.coef_, val.constraint, smooth_type=type(val))
+        v += list(np.diag(V).astype(int))
     
     return np.array(v, dtype=np.int)    
     
@@ -338,7 +342,8 @@ def test_model_against_constraint(model, dim=None, plot_=False):
     X_test = np.linspace(0,1,n_samples*dim).reshape((-1, dim))
     y_pred = model.predict(X=X_test)
     v = []
-    constraints = [s.constraint for s in model.smooths]
+    # constraints = [s.constraint for s in model.smooths]
+    constraints = [val.constraint for val in model.smooths.values()]
     for constraint in constraints:
         if constraint == "inc":
             test = np.diff(y_pred) < 0

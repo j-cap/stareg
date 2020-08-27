@@ -95,44 +95,56 @@ class StarModel(BaseEstimator):
             Target data of size (n_samples, ) for peak/valley penalty. 
         
         """
-
-        self.smooths = list()
+        smooths = dict()
         for k,v in self.description_dict.items():
-            if k.startswith("s"):    
-                self.smooths.append(
-                    s(
-                        x_data=X[:,int(k[2])-1], 
-                        n_param=v["n_param"], 
-                        constraint=v["constraint"], 
-                        y_peak_or_valley=y,
-                        lambdas=v["lam"],
-                        type_=v["knot_type"]
-                    )
-                )
+            if k.startswith("s"):
+                smooths[k] = s(x_data=X[:,int(k[2])-1],  n_param=v["n_param"], constraint=v["constraint"], 
+                                y_peak_or_valley=y,lambdas=v["lam"], type_=v["knot_type"])
             elif k.startswith("t"):
-                self.smooths.append(
-                    tps(
-                        x_data=X[:, [int(k[2])-1, int(k[4])-1]], 
-                        n_param=list(v["n_param"]), 
-                        constraint=v["constraint"],
-                        lambdas=v["lam"],
-                        type_=v["knot_type"]
-                    )
-                )    
+                smooths[k] = tps(x_data=X[:, [int(k[2])-1, int(k[4])-1]],  n_param=list(v["n_param"]), 
+                                constraint=v["constraint"], lambdas=v["lam"], type_=v["knot_type"])
+        self.basis = np.concatenate([v.basis for v in smooths.values()], axis=1)
+        smoothnes_penalty_list = [v.lam["smoothness"] * v.smoothness for v in smooths.values()]
+        self.smoothness_penalty_matrix = block_diag(*smoothnes_penalty_list)
+        n_coef_list = [0] + [np.product(smooth.n_param) for smooth in smooths.values()]
+        self.coef_list = np.cumsum(n_coef_list)
+        self.smooths = smooths
         
-        self.basis = np.concatenate([smooth.basis for smooth in self.smooths], axis=1) 
-        self.smoothness_penalty_list = [s.lam["smoothness"] * s.smoothness for s in self.smooths]
-        #  self.smoothness_penalty_matrix is already lambda * S.T @ S
-        self.smoothness_penalty_matrix = block_diag(*self.smoothness_penalty_list)
-
-        n_coef_list = [0] + [np.product(smooth.n_param) for smooth in self.smooths]
-        self.coef_list = np.cumsum(n_coef_list)            
+        #self.smooths = list()
+        #for k,v in self.description_dict.items():
+        #    if k.startswith("s"):    
+        #        self.smooths.append(
+        #            s(
+        #                x_data=X[:,int(k[2])-1], 
+        #                n_param=v["n_param"], 
+        #                constraint=v["constraint"], 
+        #                y_peak_or_valley=y,
+        #                lambdas=v["lam"],
+        #                type_=v["knot_type"]
+        #            )
+        #        )
+        #    elif k.startswith("t"):
+        #        self.smooths.append(
+        #            tps(
+        #                x_data=X[:, [int(k[2])-1, int(k[4])-1]], 
+        #                n_param=list(v["n_param"]), 
+        #                constraint=v["constraint"],
+        #                lambdas=v["lam"],
+        #                type_=v["knot_type"]
+        #            )
+        #        )    
+        #
+        #self.basis = np.concatenate([smooth.basis for smooth in self.smooths], axis=1) 
+        #self.smoothness_penalty_list = [s.lam["smoothness"] * s.smoothness for s in self.smooths]
+        ##  self.smoothness_penalty_matrix is already lambda * S.T @ S
+        #self.smoothness_penalty_matrix = block_diag(*self.smoothness_penalty_list)
+#
+        #n_coef_list = [0] + [np.product(smooth.n_param) for smooth in self.smooths]
+        #self.coef_list = np.cumsum(n_coef_list)            
                                                 
-    def create_constraint_penalty_matrix(self, beta_test=None):
+    def create_constraint_penalty_matrix(self):
         """Create the penalty block matrix specified in self.description_str.
         
-        
-
         Parameters
         ----------
         beta_test : array
@@ -151,19 +163,24 @@ class StarModel(BaseEstimator):
         #     [x]  include the weights !!! 
         #     [x]  include TPS smoothnes penalty
         #     [ ]  include TPS shape penalty
-        
-        assert (self.smooths is not None), "Run Model.create_basis() first!"
-        assert (beta_test is not None), "Include beta_test!"
-        
-        self.constraint_penalty_list = []        
-        for idx, smooth in enumerate(self.smooths):
-            b = beta_test[self.coef_list[idx]:self.coef_list[idx+1]]
-            P = smooth.penalty_matrix
-            V = check_constraint(beta=b, constraint=smooth.constraint, smooth_type=type(smooth))
-            # there can be complex values when using TPS constraints -> cast to float
-            self.constraint_penalty_list.append(smooth.lam["constraint"] * (P.real.T @ V @ P.real))
-        #  self.constraint_penalty_matrix is already lambda P.T @ V @ P.T
-        self.constraint_penalty_matrix = block_diag(*self.constraint_penalty_list)
+               
+        cpl = []
+        for v in self.smooths.values():
+            b = v.coef_
+            P = v.penalty_matrix
+            V = check_constraint(beta=b, constraint=v.constraint, smooth_type=type(v))
+            cpl.append(v.lam["constraint"] * (P.real.T @ V @ P.real))
+
+        self.constraint_penalty_matrix = block_diag(*cpl)
+        #self.constraint_penalty_list = []        
+        #for idx, smooth in enumerate(self.smooths):
+        #    b = beta_test[self.coef_list[idx]:self.coef_list[idx+1]]
+        #    P = smooth.penalty_matrix
+        #    V = check_constraint(beta=b, constraint=smooth.constraint, smooth_type=type(smooth))
+        #    # there can be complex values when using TPS constraints -> cast to float
+        #    self.constraint_penalty_list.append(smooth.lam["constraint"] * (P.real.T @ V @ P.real))
+        ##  self.constraint_penalty_matrix is already lambda P.T @ V @ P.T
+        #self.constraint_penalty_matrix = block_diag(*self.constraint_penalty_list)
     
     def calc_LS_fit(self, X, y):
         """Calculate the basis least squares fit without penalties.
@@ -189,6 +206,10 @@ class StarModel(BaseEstimator):
         fitting = lstsq(a=self.basis, b=y, rcond=None)
         beta_0 = fitting[0].ravel()
         self.coef_, self.LS_coef_ = beta_0, beta_0        
+        #  update the coefficient values for each smooth
+        for i, v in enumerate(self.smooths.values()):
+            v.coef_ = self.coef_[self.coef_list[i]:self.coef_list[i+1]]
+
         return self
 
     def create_df_for_beta(self, beta_init=None):
@@ -215,7 +236,7 @@ class StarModel(BaseEstimator):
         df = df.append(pd.Series(d), ignore_index=True)
         return df
 
-    def fit(self, X, y, plot_=True, max_iter=5):
+    def fit(self, X, y, plot_=True, max_iter=5, cp=None, weight=1000):
         """Calculate the PIRLS fit for data (X, y).
 
         Calculate the penalized iterative reweighted least squares (PIRLS) fit for
@@ -231,6 +252,10 @@ class StarModel(BaseEstimator):
             Maximal number of iterations of PIRLS.
         plot_ : boolean
             Indicatior whether to plot the results.
+        cp : None or array
+            Points for weighted fit, if None they are ignored.
+        weight : int
+            Weight value for weighted fit. 
         
         Returns 
         -------
@@ -238,29 +263,30 @@ class StarModel(BaseEstimator):
             Returns the fitted model.
 
         """
-        #  TODO:
-        #     [x] check constraint violation in the iterative fit
-        #     [x] incorporate TPS in the iterative fit
-
         if len(X.shape) == 1:
             X = X.values.reshape((-1,1))
+        if cp is not None:
+            X, y, w = self.add_weighted_points(X=X, y=y, Xw=cp[:,:-1], yw=cp[:,-1])
+        else:
+            w = np.ones(X.shape[0])
         X, y = check_X_y(X, y.ravel())
         self = self.calc_LS_fit(X=X, y=y)
         df = self.create_df_for_beta(beta_init=self.coef_)
         
         for i in range(max_iter):
-            self.create_constraint_penalty_matrix(beta_test=self.coef_)
+            self.create_constraint_penalty_matrix()
             DVD = self.constraint_penalty_matrix
             DD = self.smoothness_penalty_matrix
-            BB, By = self.basis.T @ self.basis, self.basis.T @ y
+            BwB, Bwy = self.basis.T @ np.diag(w) @ self.basis, self.basis.T @ (w * y)
             v_old = check_constraint_full_model(model=self)
-            beta_new = (np.linalg.pinv(BB + DD + DVD) @ By).ravel()
+            beta_new = (np.linalg.pinv(BwB + DD + DVD) @ Bwy).ravel()
             self.coef_ = beta_new                       
             v_new = check_constraint_full_model(model=self)
             df.loc[i+1] = self.coef_
             delta_v = np.sum(v_new - v_old)
-            #  change the criteria to the following: 
-            #  print("Differences at the following coefficients: ", np.argwhere(v_old != v_new))
+            for i, v in enumerate(self.smooths.values()):
+                v.coef_ = self.coef_[self.coef_list[i]:self.coef_list[i+1]]
+
             if delta_v == 0: 
                 break
 
@@ -271,62 +297,38 @@ class StarModel(BaseEstimator):
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self
 
-    def weighted_fit(self, X, y, critical_point=None, plot_=True, max_iter=5, weights=1000):
-        """Calculate a weighted PIRLS fit that goes through the critical point. 
+    def add_weighted_points(self, X, y, Xw, yw, weights=1000):
+        """Add the points (Xw, yw) to the dataset and create a weight matrix.
 
-        Parameters
-        ----------
+        Parameter
+        ---------
         X : np.ndarray
-            Data of size (n_samples, n_dimensions).
-        y : array
-            Target data of size (n_samples, ).
-        max_iter : int
-            Maximal number of iterations of PIRLS.
-        plot_ : boolean
-            Indicatior whether to plot the results.
-        critical_point: array
-            Critical points for the weighted fit. Shape = (n_critical_points, n_dimensions + 1)
+            Base data of shape (n_samples, n_dim).
+        y : np.array
+            Base target data of shape (n_samples, ).
+        Xw : np.ndarray
+            Weigthed data points of shape (n_weighted, dim).
+        yw : np.array
+            Weighted target data of shape (n_weighted, ).
         weights : int
-            Weight for the weighte least squares.
-
-        Returns 
+            Weight value.
+        
+        Returns
         -------
-        self : object
-            Returns the fitted model.        
+        Xn : np.ndarray
+            Adapted data set of shape (n_samples + n_weighted, dim).
+        yn : np.array
+            Adapted target data of shape (n_samples + n_weighted, ).
+        W : np.ndarray
+            Weight vector of shape (n_samples + n_weighted, ).
 
         """
 
-        # assert (X.shape[1] == critical_point.shape[1]-1), "Dimension not compatible"
-        X_new = np.vstack((X, critical_point[:, :-1]))
-        y_new = np.append(y, critical_point[:, -1])
-        w = np.ones(X_new.shape[0])
-        # w[:critical_point.shape[0]] = weights
-        w[-1*critical_point.shape[0]:] = weights
-
-        X, y = check_X_y(X_new, y_new.ravel())
-        self = self.calc_LS_fit(X=X, y=y)
-        df = self.create_df_for_beta(beta_init=self.coef_)
-        
-        for _ in range(max_iter):
-            self.create_constraint_penalty_matrix(beta_test=self.coef_)
-            DVD = self.constraint_penalty_matrix
-            DD = self.smoothness_penalty_matrix
-            BwB, Bwy = self.basis.T @ np.diag(w) @ self.basis, self.basis.T @ (w * y)
-            v_old = check_constraint_full_model(model=self)
-            beta_new = (np.linalg.pinv(BwB + DD + DVD) @ Bwy).ravel()
-            v_new = check_constraint_full_model(model=self)
-            self.coef_ = beta_new                       
-            df = df.append(pd.DataFrame(data=beta_new.reshape(1,-1), columns=df.columns))
-            delta_v = np.sum(v_new - v_old)
-            if delta_v == 0: 
-                break
-
-        self.df = df
-        self.mse = mean_squared_error(y, self.basis @ self.coef_)       
-        if plot_: 
-            self.plot_fit(X=X, y=y).show()
-            print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
-        return self      
+        Xn = np.vstack((X, Xw))
+        yn = np.append(y, yw)
+        w = np.ones(Xn.shape[0])
+        w[-1*Xw.shape[0]:] = weights
+        return Xn, yn, w
         
     def predict(self, X, extrapol_type="zero", depth=10):
         """Prediction of the trained model on the data in X.

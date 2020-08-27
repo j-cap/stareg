@@ -32,6 +32,7 @@ class Smooths(Bspline):
         """
         self.x_data = x_data
         self.n_param = n_param
+        self.coef_ = None
         self.constraint = constraint
         if lambdas is None:
             self.lam = {"smoothness":1, "constraint": 1000}
@@ -108,6 +109,7 @@ class TensorProductSmooths(TensorProductSpline):
         self.x_data = x_data
         self.x1, self.x2 = x_data[:,0], x_data[:,1]
         self.n_param = n_param
+        self.coef_ = None
         self.constraint = constraint
         if lambdas is None:
             self.lam = {"smoothness":0, "constraint": 0}
