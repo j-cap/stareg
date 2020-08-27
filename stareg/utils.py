@@ -339,10 +339,9 @@ def test_model_against_constraint(model, dim=None, plot_=False):
     """
     
     n_samples = 1000
-    X_test = np.linspace(0,1,n_samples*dim).reshape((-1, dim))
-    y_pred = model.predict(X=X_test)
+    x_test = np.linspace(0,1,n_samples*dim).reshape((-1, dim))
+    y_pred = model.predict(X=x_test)
     v = []
-    # constraints = [s.constraint for s in model.smooths]
     constraints = [val.constraint for val in model.smooths.values()]
     for constraint in constraints:
         if constraint == "inc":
@@ -370,8 +369,54 @@ def test_model_against_constraint(model, dim=None, plot_=False):
     
     if plot_:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True)        
-        fig.add_trace(go.Scatter(x=X_test[:,0], y=y_pred, name="Fit"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=X_test[:,0], y=test, mode="markers", name=constraint), row=2, col=1)
+        fig.add_trace(go.Scatter(x=x_test[:,0], y=y_pred, name="Fit"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=x_test[:,0], y=test, mode="markers", name=constraint), row=2, col=1)
         fig.show()
     return alltests
 
+def test_model_against_constraints(model):
+    """Test all submodels against the constraints for the submodel. 
+
+    Parameter
+    ---------
+    model : StarModel
+
+    Returns
+    -------
+    ICP : float
+        Invalid constraint percentage value.
+    
+    """
+
+    alltests = []
+    for k,v in model.smooths.items():
+        y_pred = v.basis @ v.coef_
+        t = test_against_constraint(constraint=v.constraint, y_pred=y_pred)
+        alltests.append(t)
+    alltests = [item for sublist in alltests for item in sublist]
+    ICP = sum(alltests) / len(alltests)
+    return ICP
+
+def test_against_constraint(constraint, y_pred):
+
+    if constraint == "inc":
+        test = np.diff(y_pred) < 0
+    elif constraint == "dec":
+        test = np.diff(y_pred) > 0
+    elif constraint == "conv":
+        test = np.diff(np.diff(y_pred)) < 0
+    elif constraint == "conc":
+        test = np.diff(np.diff(y_pred)) > 0
+    elif constraint == "peak":
+        test = check_peak_constraint(beta=y_pred)
+    elif constraint == "multi-peak":
+        test = check_multi_peak_constraint(beta=y_pred)
+    elif constraint == "valley":
+        test = check_valley_constraint(beta=y_pred)
+    elif constraint == "multi-valley":
+        test = check_multi_valley_constraint(beta=y_pred)
+    elif constraint == "peak-and-valley":
+        test = check_peak_and_valley_constraint(beta=y_pred)
+    elif constraint == "smooth":
+        test = np.zeros(len(y_pred))
+    return test

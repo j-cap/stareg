@@ -24,7 +24,7 @@ from .smooth import Smooths as s
 from .smooth import TensorProductSmooths as tps
 from .penalty_matrix import PenaltyMatrix
 from .utils import check_constraint, check_constraint_full_model
-from .utils import test_model_against_constraint
+from .utils import test_model_against_constraints
 
 class StarModel(BaseEstimator):
     """Implementation of a structured additive regression model.
@@ -108,39 +108,7 @@ class StarModel(BaseEstimator):
         self.smoothness_penalty_matrix = block_diag(*smoothnes_penalty_list)
         n_coef_list = [0] + [np.product(smooth.n_param) for smooth in smooths.values()]
         self.coef_list = np.cumsum(n_coef_list)
-        self.smooths = smooths
-        
-        #self.smooths = list()
-        #for k,v in self.description_dict.items():
-        #    if k.startswith("s"):    
-        #        self.smooths.append(
-        #            s(
-        #                x_data=X[:,int(k[2])-1], 
-        #                n_param=v["n_param"], 
-        #                constraint=v["constraint"], 
-        #                y_peak_or_valley=y,
-        #                lambdas=v["lam"],
-        #                type_=v["knot_type"]
-        #            )
-        #        )
-        #    elif k.startswith("t"):
-        #        self.smooths.append(
-        #            tps(
-        #                x_data=X[:, [int(k[2])-1, int(k[4])-1]], 
-        #                n_param=list(v["n_param"]), 
-        #                constraint=v["constraint"],
-        #                lambdas=v["lam"],
-        #                type_=v["knot_type"]
-        #            )
-        #        )    
-        #
-        #self.basis = np.concatenate([smooth.basis for smooth in self.smooths], axis=1) 
-        #self.smoothness_penalty_list = [s.lam["smoothness"] * s.smoothness for s in self.smooths]
-        ##  self.smoothness_penalty_matrix is already lambda * S.T @ S
-        #self.smoothness_penalty_matrix = block_diag(*self.smoothness_penalty_list)
-#
-        #n_coef_list = [0] + [np.product(smooth.n_param) for smooth in self.smooths]
-        #self.coef_list = np.cumsum(n_coef_list)            
+        self.smooths = smooths          
                                                 
     def create_constraint_penalty_matrix(self):
         """Create the penalty block matrix specified in self.description_str.
@@ -164,23 +132,14 @@ class StarModel(BaseEstimator):
         #     [x]  include TPS smoothnes penalty
         #     [ ]  include TPS shape penalty
                
-        cpl = []
+        cp_list = []
         for v in self.smooths.values():
             b = v.coef_
             P = v.penalty_matrix
             V = check_constraint(beta=b, constraint=v.constraint, smooth_type=type(v))
-            cpl.append(v.lam["constraint"] * (P.real.T @ V @ P.real))
+            cp_list.append(v.lam["constraint"] * (P.real.T @ V @ P.real))
+        self.constraint_penalty_matrix = block_diag(*cp_list)
 
-        self.constraint_penalty_matrix = block_diag(*cpl)
-        #self.constraint_penalty_list = []        
-        #for idx, smooth in enumerate(self.smooths):
-        #    b = beta_test[self.coef_list[idx]:self.coef_list[idx+1]]
-        #    P = smooth.penalty_matrix
-        #    V = check_constraint(beta=b, constraint=smooth.constraint, smooth_type=type(smooth))
-        #    # there can be complex values when using TPS constraints -> cast to float
-        #    self.constraint_penalty_list.append(smooth.lam["constraint"] * (P.real.T @ V @ P.real))
-        ##  self.constraint_penalty_matrix is already lambda P.T @ V @ P.T
-        #self.constraint_penalty_matrix = block_diag(*self.constraint_penalty_list)
     
     def calc_LS_fit(self, X, y):
         """Calculate the basis least squares fit without penalties.
@@ -209,32 +168,7 @@ class StarModel(BaseEstimator):
         #  update the coefficient values for each smooth
         for i, v in enumerate(self.smooths.values()):
             v.coef_ = self.coef_[self.coef_list[i]:self.coef_list[i+1]]
-
         return self
-
-    def create_df_for_beta(self, beta_init=None):
-        """Create a DataFrame to save the calculated coefficients during the iteration.
-
-        DataFrame contains one colume for each coefficient and one row for
-        each iteration. 
-
-        Parameters
-        ----------
-        beta_init : array
-            Coefficient array to initilize the dataframe. 
-
-        Returns
-        -------
-        df : pd.DataFrame
-            Coefficient DataFrame.
-        
-        """
-
-        col_name = [ f"b_{i}" for i in range(len(beta_init))]        
-        df = pd.DataFrame(columns=col_name)
-        d = dict(zip(col_name, beta_init))
-        df = df.append(pd.Series(d), ignore_index=True)
-        return df
 
     def fit(self, X, y, plot_=True, max_iter=5, cp=None, weight=1000):
         """Calculate the PIRLS fit for data (X, y).
@@ -297,6 +231,40 @@ class StarModel(BaseEstimator):
             print(f"Violated Constraints: {np.sum(check_constraint_full_model(model=self))} from {len(self.coef_)} ")
         return self
 
+    def predict(self, X, extrapol_type="zero", depth=10):
+        """Prediction of the trained model on the data in X.
+        
+        Parameters
+        ----------
+        X : np.ndarray
+            Data of shape (n_samples,) to predict values for.
+        extrapol_type: 
+            Indiactor of the extrapolation type. 
+        depth : int
+            Indicates how many coefficients are used for the linear extrapolation.
+
+        Returns
+        -------
+        pred : array
+            Returns the predicted values. 
+ 
+        """
+
+        y_pred = []
+        for x in X:
+            if np.all(x >= 0) and np.all(x <= 1):
+                pred = []
+                for k, v in self.smooths.items():
+                    if k.startswith("s"):
+                        pred.append(v.spp(sp=x[int(k[2])-1], coef_=v.coef_))
+                    elif k.startswith("t"):
+                        pred.append(v.spp(sp=x[int(k[2])-1:int(k[4])], coef_=v.coef_))
+            else:
+                pred.append(self.extrapolate(X=x, type_=extrapol_type, depth=depth))
+            y_pred.append(sum(pred))
+        y_pred = np.array([y_pred])
+        return y_pred.ravel()
+
     def add_weighted_points(self, X, y, Xw, yw, weights=1000):
         """Add the points (Xw, yw) to the dataset and create a weight matrix.
 
@@ -329,47 +297,37 @@ class StarModel(BaseEstimator):
         w = np.ones(Xn.shape[0])
         w[-1*Xw.shape[0]:] = weights
         return Xn, yn, w
-        
-    def predict(self, X, extrapol_type="zero", depth=10):
-        """Prediction of the trained model on the data in X.
-        
+
+    def create_df_for_beta(self, beta_init=None):
+        """Create a DataFrame to save the calculated coefficients during the iteration.
+
+        DataFrame contains one colume for each coefficient and one row for
+        each iteration. 
+
         Parameters
         ----------
-        X : np.ndarray
-            Data of shape (n_samples,) to predict values for.
-        extrapol_type: 
-            Indiactor of the extrapolation type. 
-        depth : int
-            Indicates how many coefficients are used for the linear extrapolation.
+        beta_init : array
+            Coefficient array to initilize the dataframe. 
 
         Returns
         -------
-        pred : array
-            Returns the predicted values. 
- 
+        df : pd.DataFrame
+            Coefficient DataFrame.
+        
         """
-        check_is_fitted(self, attributes="coef_", msg="Estimator is not fitted when using predict()!")
-        y_pred = []
-        for x in X:
-            if np.all(x >= 0) and np.all(x <= 1):
-                pred = []
-                for idx, s in enumerate(self.smooths_list):
-                    if s.startswith("s"):
-                        pred.append(self.smooths[idx].spp(sp=x[int(s[2])-1], coef_=self.coef_[self.coef_list[idx]:self.coef_list[idx+1]]))
-                    elif s.startswith("t"):
-                        pred.append(self.smooths[idx].spp(sp=x[int(s[2])-1:int(s[4])], coef_=self.coef_[self.coef_list[idx]:self.coef_list[idx+1]]))
-                y_pred.append(sum(pred))
-            else:
-                y_pred.append(self.extrapolate(X=x, type_=extrapol_type, depth=depth))
-        y_pred = np.array([y_pred])
-        return y_pred.ravel()
+
+        col_name = [ f"b_{i}" for i in range(len(beta_init))]        
+        df = pd.DataFrame(columns=col_name)
+        d = dict(zip(col_name, beta_init))
+        df = df.append(pd.Series(d), ignore_index=True)
+        return df
 
     def predict_single_point(self, X):
         """Fast single point prediction.
 
         Parameter
         ----------
-        X : float
+        X : array
             Single point data.
 
         Returns
@@ -379,13 +337,12 @@ class StarModel(BaseEstimator):
 
         """
         y_pred = []
-        for idx, s in enumerate(self.smooths_list):
-            if s.startswith("s"):
-                y_pred.append(self.smooths[idx].spp(sp=X[int(s[2])-1], coef_=self.coef_[self.coef_list[idx]:self.coef_list[idx+1]]))
-            elif s.startswith("t"):
-                y_pred.append(self.smooths[idx].spp(sp=X[int(s[2])-1:int(s[4])], coef_=self.coef_[self.coef_list[idx]:self.coef_list[idx+1]]))
+        for k, v in self.smooths.items():
+            if k.startswith("s"):
+                y_pred.append(v.spp(sp=X[int(k[2])-1], coef_=v.coef_))
+            elif k.startswith("t"):
+                y_pred.append(v.spp(sp=X[int(k[2])-1:int(k[4])], coef_=v.coef_))
         return sum(y_pred)
-
 
     def extrapolate(self, X, type_="constant", depth=10):
         """ Evaluate the extrapolation value for the given X. 
@@ -473,8 +430,8 @@ class StarModel(BaseEstimator):
         sigma_hat = np.sqrt(1 / (Z.shape[0] - np.trace(2*S - S @ S.T)) * Z.shape[0] * self.mse)
 
         z = np.empty((X.shape[0], len(self.coef_)))
-        for coef_idx in range(len(self.coef_)):
-            z[:,coef_idx] = self.smooths[0].bspline(x=X.ravel(), knots=self.smooths[0].knots, i=coef_idx, m=2)
+        for coef_idx in range(len(self.smooths["s(1)"].coef_)):
+            z[:,coef_idx] = self.smooths["s(1)"].bspline(x=X[:,0], knots=self.smooths["s(1)"].knots, i=coef_idx, m=2)
         
         s_t = z @ np.linalg.inv(Z.T @ Z + lambda_k) @ Z.T
         sqrt_sts = np.sqrt(np.diag(s_t @ s_t.T))
@@ -604,8 +561,6 @@ class StarModel(BaseEstimator):
         )
         return fig       
 
-
-
     def calc_hat_matrix(self):
         """Calculates the hat matrix (influence matrix) of the fitted model.
         
@@ -658,9 +613,7 @@ class StarModel(BaseEstimator):
                 params[k] = spacing
             elif lam_type == "c":
                 params[k] = spacing * 1e6
-
         grid = ParameterGrid(params)
-
         return grid
 
     def calc_GCV_score(self, y):
@@ -745,7 +698,6 @@ class StarModel(BaseEstimator):
         If deep==True, also return parameters of sub-estimators (can be ignored).
 
         """
-
         return self.description_dict
 
     def set_params(self, params):
@@ -785,6 +737,29 @@ class StarModel(BaseEstimator):
             descr_dict[s]["lam"][t] = params[k]
         self.description_dict = descr_dict
 
+    def MSPE(self, X=None, y=None, precision=5):
+        """Calculate the mean squared prediction error.
+
+        Parameter
+        ---------
+        X : np.ndarray
+            Test data of shape (n_test, n_dim).
+        y : np.array
+            True target data of shape (n_test, ).
+        precision : int
+            Precision of the returned value.
+
+        Returns
+        -------
+        mspe : float
+            Mean squared prediction error.
+        
+        """
+        ypred = self.predict(X=X)
+        mspe = mean_squared_error(ypred, y)
+        return mspe.round(decimals=precision)
+
+
     def eval_metric(self, X=None, y=None, precision=5):
         """Evaulate the metric M = MSE_prediction + ICP. 
         
@@ -806,8 +781,7 @@ class StarModel(BaseEstimator):
 
         """
 
-        test = test_model_against_constraint(model=self, plot_=False, dim=X.shape[1])
-        ICP = test.sum() / len(test)
+        ICP = test_model_against_constraints(model=self)
         
         y_pred = self.predict(X=X)
         mse_test = mean_squared_error(y_pred, y)

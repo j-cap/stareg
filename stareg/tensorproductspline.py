@@ -33,9 +33,6 @@ class TensorProductSpline(Bspline, PenaltyMatrix):
         """
         
         self.x1, self.x2 = x_data[:,0], x_data[:,1]
-        self.x1, self.x2 = np.unique(self.x1), np.unique(self.x2)
-        self.x1.sort()
-        self.x2.sort()
         self.k1, self.k2 = k1, k2
         bspline_x1, bspline_x2 = Bspline(), Bspline()
         bspline_x1.bspline_basis(x_data=self.x1, k=self.k1, type_=type_)
