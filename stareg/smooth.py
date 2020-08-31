@@ -134,6 +134,18 @@ class TensorProductSmooths(TensorProductSpline):
             K1, K2 = P1.T @ P1, P2.T @ P2
             K = np.kron(np.eye(self.n_param[1]), K1) + np.kron(K2, np.eye(self.n_param[0]))
             self.penalty_matrix = sqrtm(K)
+        elif constraint == "inc_2":
+            # increasing constraint in dimension 1
+            P1 = self.d1_difference_matrix(n_param=self.n_param[0])
+            I2, K1 = np.eye(self.n_param[1]), P1.T @ P1
+            K = np.kron(I2, K1)
+            self.penalty_matrix = sqrtm(K)
+        elif constraint == "inc_1":
+            # increasing constraint in dimension 2
+            P2 = self.d1_difference_matrix(n_param=self.n_param[1])
+            I1, K2 = np.eye(self.n_param[0]), P2.T @ P2
+            K = np.kron(K2, I1)
+            self.penalty_matrix = sqrtm(K)
         elif constraint == "smooth":
             self.penalty_matrix = np.zeros((np.prod(self.n_param)-2, np.prod(self.n_param)))
         else:

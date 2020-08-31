@@ -7,7 +7,7 @@ import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 from scipy.signal import find_peaks
 
-def check_constraint(beta, constraint, smooth_type="spline"):
+def check_constraint(beta, constraint, smooth_type=None):
     """Checks if array beta fits the constraint.
     
     Parameters
@@ -53,6 +53,10 @@ def check_constraint(beta, constraint, smooth_type="spline"):
     elif str(smooth_type) == "<class 'stareg.smooth.TensorProductSmooths'>":
         if constraint == "inc":
             v = check_constraint_inc_tps(beta=beta)
+        elif constraint == "inc_1":
+            v = check_constraint_inc_1_tps(beta=beta)
+        elif constraint == "inc_2":
+            v = check_constraint_inc_2_tps(beta=beta)
         elif constraint == "dec":
             v = check_constraint_dec_tps(beta=beta)
         elif constraint == "smooth":
@@ -77,7 +81,7 @@ def check_constraint_inc_tps(beta):
         Vector with 1 where constraint is violated, 0 elsewhere.
 
     """
-    n_coef = int(np.sqrt(len(beta)))
+    n_coef = int(np.sqrt(len(beta)))  # !!! only for same n_param per dimension
     beta = beta.reshape(n_coef, n_coef)
     V1 = np.zeros((n_coef, n_coef))
     V2 = np.zeros((n_coef, n_coef))
@@ -87,6 +91,51 @@ def check_constraint_inc_tps(beta):
     V2[0,1:] = np.diff(beta[0,:])
     v = np.logical_or(V1 < 0, V2 < 0).flatten()
     return v.astype(int)
+
+def check_constraint_inc_1_tps(beta):
+    """Calculate the weight vector v for first dimension increasing constraint using
+    row-wise first order differences.
+
+    Parameters
+    ----------
+    beta : array
+        Array of coefficients to test for 1D increasing constraint.
+
+    Returns
+    -------
+    v : array
+        Vector with 1 where constraint is violated, 0 elsewhere.
+
+    """
+    n_coef = int(np.sqrt(len(beta)))  # !!! only for same n_param per dimension
+    beta = beta.reshape(n_coef, n_coef)
+    V = np.zeros((n_coef, n_coef))
+    V[:, :-1] = np.diff(beta)
+    v = (V < 0).flatten()
+    return v.astype(int)
+
+def check_constraint_inc_2_tps(beta):
+    """Calculate the weight vector v for second dimension increasing constraint using 
+    column-wise first order differences.
+
+    Parameters
+    ----------
+    beta : array
+        Array of coefficients to test for 1D increasing constraint.
+
+    Returns
+    -------
+    v : array
+        Vector with 1 where constraint is violated, 0 elsewhere.
+
+    """
+    n_coef = int(np.sqrt(len(beta)))  # !!! only for same n_param per dimension
+    beta = beta.reshape(n_coef, n_coef)
+    V = np.zeros((n_coef, n_coef))
+    V[:-1,:] = np.diff(beta, axis=0)
+    v = (V < 0).flatten()
+    return v.astype(int)
+
 
 def check_constraint_dec_tps(beta):
     """Calculate the weight vector v for the decreasing constraint for tps.
@@ -102,7 +151,7 @@ def check_constraint_dec_tps(beta):
         Vector with 1 where constraint is violated, 0 elsewhere.
 
     """
-    n_coef = int(np.sqrt(len(beta)))
+    n_coef = int(np.sqrt(len(beta)))  # !!! only for same n_param per dimension
     beta = beta.reshape(n_coef, n_coef)
     V1 = np.zeros((n_coef, n_coef))
     V2 = np.zeros((n_coef, n_coef))
@@ -385,38 +434,21 @@ def test_model_against_constraints(model):
     -------
     ICP : float
         Invalid constraint percentage value.
-    
+
     """
 
     alltests = []
-    for k,v in model.smooths.items():
-        y_pred = v.basis @ v.coef_
-        t = test_against_constraint(constraint=v.constraint, y_pred=y_pred)
-        alltests.append(t)
-    alltests = [item for sublist in alltests for item in sublist]
-    ICP = sum(alltests) / len(alltests)
+    for v in model.smooths.values():
+        if str(type(v)) == "<class 'stareg.smooth.TensorProductSmooths'>":
+            xtest = np.linspace(0,1,100)
+            x1g, x2g = np.meshgrid(xtest, xtest)
+            Xtest = np.vstack((x1g.ravel(), x2g.ravel())).T
+        elif str(type(v)) == "<class 'stareg.smooth.Smooths'>":
+            Xtest = np.linspace(0,1,1000).reshape(-1,1)    
+        ypred = [v.spp(sp=sp, coef_=v.coef_) for sp in Xtest]
+        t = np.diag(check_constraint(beta=np.array(ypred), constraint=v.constraint, smooth_type=type(v)))
+        alltests.append(t.astype(int))
+    ICP_list = list(map(lambda x: sum(x) / len(x), alltests))
+    ICP = sum(ICP_list)
     return ICP
 
-def test_against_constraint(constraint, y_pred):
-
-    if constraint == "inc":
-        test = np.diff(y_pred) < 0
-    elif constraint == "dec":
-        test = np.diff(y_pred) > 0
-    elif constraint == "conv":
-        test = np.diff(np.diff(y_pred)) < 0
-    elif constraint == "conc":
-        test = np.diff(np.diff(y_pred)) > 0
-    elif constraint == "peak":
-        test = check_peak_constraint(beta=y_pred)
-    elif constraint == "multi-peak":
-        test = check_multi_peak_constraint(beta=y_pred)
-    elif constraint == "valley":
-        test = check_valley_constraint(beta=y_pred)
-    elif constraint == "multi-valley":
-        test = check_multi_valley_constraint(beta=y_pred)
-    elif constraint == "peak-and-valley":
-        test = check_peak_and_valley_constraint(beta=y_pred)
-    elif constraint == "smooth":
-        test = np.zeros(len(y_pred))
-    return test
