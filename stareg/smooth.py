@@ -10,7 +10,7 @@ from .tensorproductspline import TensorProductSpline
 class Smooths(Bspline):
     """Implementation of the 1d smooth used in Structured Additive Models."""
 
-    def __init__(self, x_data, n_param, constraint="smooth", y_peak_or_valley=None, 
+    def __init__(self, x_data, n_param, constraint="smooth", y=None, 
                 lambdas=None, type_="quantile"):
         """Create the B-spline basis as well as the constraint matrices for the constraint.
         
@@ -22,7 +22,7 @@ class Smooths(Bspline):
             Number of B-Splines to use for the basis.
         constraint : str
             Type of constraint, one of {inc", "dec", "conv", "conc", "peak", "valley"}.
-        y_peak_or_valley : array 
+        y : array 
             Response variable of shape (n_samples, ) values to search for the peak or valley, respectively. 
         lambdas : dict
             Smoothing parameter value for the smoothnes and constraint penalty, e.g. {"smoothness": 1, "constraint": 1000}.
@@ -52,29 +52,29 @@ class Smooths(Bspline):
         elif constraint == "conc":
             self.penalty_matrix = -1 * self.d2_difference_matrix(n_param=self.n_param)
         elif constraint == "peak":
-            assert (y_peak_or_valley is not None), self.msg_include_ydata
+            assert (y is not None), self.msg_include_ydata
             self.penalty_matrix = self.peak_matrix(
-                n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
+                n_param=self.n_param, basis=self.basis, y_data=y
             )
         elif constraint == "valley":
-            assert (y_peak_or_valley is not None), self.msg_include_ydata
+            assert (y is not None), self.msg_include_ydata
             self.penalty_matrix = self.valley_matrix(
-                n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
+                n_param=self.n_param, basis=self.basis, y_data=y
             )
         elif constraint == "multi-peak":
-            assert (y_peak_or_valley is not None), self.msg_include_ydata
+            assert (y is not None), self.msg_include_ydata
             self.penalty_matrix = self.multi_peak_matrix(
-                n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
+                n_param=self.n_param, basis=self.basis, y_data=y
             )
         elif constraint == "multi-valley":
-            assert (y_peak_or_valley is not None), self.msg_include_ydata
+            assert (y is not None), self.msg_include_ydata
             self.penalty_matrix = self.multi_valley_matrix(
-                n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
+                n_param=self.n_param, basis=self.basis, y_data=y
             )
         elif constraint == "peak-and-valley":
-            assert (y_peak_or_valley is not None), self.msg_include_ydata
+            assert (y is not None), self.msg_include_ydata
             self.penalty_matrix = self.multi_extremum_matrix(
-                n_param=self.n_param, basis=self.basis, y_data=y_peak_or_valley
+                n_param=self.n_param, basis=self.basis, y_data=y
             )
         elif constraint == "NoConstraint":
             self.penalty_matrix = np.zeros((self.n_param, self.n_param))
@@ -85,7 +85,7 @@ class Smooths(Bspline):
 class TensorProductSmooths(TensorProductSpline):
     """Implementation of the 2d tensor product spline smooth in Structured Additive Models."""
     
-    def __init__(self, x_data=None, n_param=(1,1), constraint="smooth", lambdas=None, type_="quantile"):
+    def __init__(self, x_data=None, n_param=(1,1), constraint="none", lambdas=None, y=None, type_="quantile"):
         """Create the tensor product spline basis as well as the smoothness penalty matrices.
         
         Parameters
@@ -95,9 +95,11 @@ class TensorProductSmooths(TensorProductSpline):
         n_param : tuple
             Number of B-Splines to use for each basis.
         constraint : str
-            Type of constraint, one of {"smooth"}.
+            Type of constraint, one of {"none", "inc", "inc_1", "inc_2"}.
         lambdas : dict
             Smoothing parameter value for the smoothnes and constraint penalty, e.g. {"smoothness": 1, "constraint": 1000}.
+        y : array 
+            Response variable of shape (n_samples, ) values to search for the peak or valley, respectively. 
         type_   : str
             Describes the knot placement, either "quantile" or "equidistant".
         
@@ -125,7 +127,7 @@ class TensorProductSmooths(TensorProductSpline):
         self.smoothness = np.kron(np.eye(self.n_param[1]), K1) + np.kron(K2, np.eye(self.n_param[0]))
 
         # TODO: implement the constraints
-        if constraint == "NoConstraint":
+        if constraint == "none":
             self.penalty_matrix = np.zeros((np.prod(self.n_param), np.prod(self.n_param)))
         elif constraint == "inc":
             #  according to Fahrmeir, p. 508
@@ -134,20 +136,25 @@ class TensorProductSmooths(TensorProductSpline):
             K1, K2 = P1.T @ P1, P2.T @ P2
             K = np.kron(np.eye(self.n_param[1]), K1) + np.kron(K2, np.eye(self.n_param[0]))
             self.penalty_matrix = sqrtm(K)
-        elif constraint == "inc_2":
-            # increasing constraint in dimension 1
-            P1 = self.d1_difference_matrix(n_param=self.n_param[0])
-            I2, K1 = np.eye(self.n_param[1]), P1.T @ P1
-            K = np.kron(I2, K1)
-            self.penalty_matrix = sqrtm(K)
         elif constraint == "inc_1":
-            # increasing constraint in dimension 2
+            # increasing constraint in dimension 1
             P2 = self.d1_difference_matrix(n_param=self.n_param[1])
             I1, K2 = np.eye(self.n_param[0]), P2.T @ P2
             K = np.kron(K2, I1)
             self.penalty_matrix = sqrtm(K)
-        elif constraint == "smooth":
-            self.penalty_matrix = np.zeros((np.prod(self.n_param)-2, np.prod(self.n_param)))
+        elif constraint == "inc_2":
+            # increasing constraint in dimension 2
+            P1 = self.d1_difference_matrix(n_param=self.n_param[0])
+            I2, K1 = np.eye(self.n_param[1]), P1.T @ P1
+            K = np.kron(I2, K1)
+            self.penalty_matrix = sqrtm(K)
+        elif constraint == "peak":
+            #  use basic scheme according to Fahrmeir, p. 508
+            peak1 = self.peak_matrix(n_param=self.n_param[0], y_data=y, basis=self.basis_x1)
+            peak2 = self.peak_matrix(n_param=self.n_param[1], y_data=y, basis=self.basis_x2)
+            K1, K2 = peak1.T @ peak1, peak2.T @ peak2
+            K = np.kron(np.eye(self.n_param[1]), K1) + np.kron(K2, np.eye(self.n_param[0]))
+            self.penalty_matrix = sqrtm(K)
         else:
             self.penalty_matrix = np.zeros((np.prod(self.n_param), np.prod(self.n_param)))
             print("--- Constraint NOT FINISHED ---")

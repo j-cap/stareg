@@ -38,7 +38,7 @@ def check_constraint(beta, constraint, smooth_type=None):
         elif constraint == "conc":
             v = [0 if i < 0 else 1 for i in b_diff_diff] 
         elif constraint == "smooth":
-            v = list(np.ones(len(b_diff_diff), dtype=np.int))
+            v = np.zeros(len(b_diff_diff))
         elif constraint == "peak":
             v = check_peak_constraint(beta=beta)
         elif constraint == "multi-peak":
@@ -52,7 +52,7 @@ def check_constraint(beta, constraint, smooth_type=None):
 
     elif str(smooth_type) == "<class 'stareg.smooth.TensorProductSmooths'>":
         if constraint == "inc":
-            v = check_constraint_inc_tps(beta=beta)
+            v = check_constraint_inc_tps(beta=beta, n_coef=(int(np.sqrt(len(beta))), int(np.sqrt(len(beta)))))
         elif constraint == "inc_1":
             v = check_constraint_inc_1_tps(beta=beta)
         elif constraint == "inc_2":
@@ -60,20 +60,26 @@ def check_constraint(beta, constraint, smooth_type=None):
         elif constraint == "dec":
             v = check_constraint_dec_tps(beta=beta)
         elif constraint == "smooth":
-            v = np.ones(len(beta)-2)
+            v = np.zeros(len(beta)-2)
+        elif constraint == "peak":
+            v = check_constraint_peak_tps(beta=beta, n_coef=(int(np.sqrt(len(beta))), int(np.sqrt(len(beta)))))
+        elif constraint == "none":
+            v = np.zeros(len(beta))
         else:
             print(f"Constraint {constraint} not implemented for TPS")
             return
 
     return np.diag(v)
 
-def check_constraint_inc_tps(beta):
+def check_constraint_inc_tps(beta, n_coef=None):
     """Calculate the weight vector v for the increasing constraint for tps.
 
     Parameters
     ----------
     beta : array
         Array of coefficients to test for increasing constraint.
+    n_coef : tuple
+        Tuple of integers of the number of coefficients per region.
 
     Returns
     -------
@@ -81,10 +87,10 @@ def check_constraint_inc_tps(beta):
         Vector with 1 where constraint is violated, 0 elsewhere.
 
     """
-    n_coef = int(np.sqrt(len(beta)))  # !!! only for same n_param per dimension
-    beta = beta.reshape(n_coef, n_coef)
-    V1 = np.zeros((n_coef, n_coef))
-    V2 = np.zeros((n_coef, n_coef))
+
+    beta = beta.reshape(n_coef[0], n_coef[1])
+    V1 = np.zeros((n_coef[0], n_coef[1]))
+    V2 = np.zeros((n_coef[0], n_coef[1]))
     V1[:,1:] = np.diff(beta)
     V1[1:,0] = np.diff(beta[:,0])
     V2[1:,:] = np.diff(beta, axis=0)
@@ -137,8 +143,35 @@ def check_constraint_inc_2_tps(beta):
     return v.astype(int)
 
 
-def check_constraint_dec_tps(beta):
+def check_constraint_dec_tps(beta, n_coef=None):
     """Calculate the weight vector v for the decreasing constraint for tps.
+
+    Parameters
+    ----------
+    beta : array
+        Array of coefficients to test for decreasing constraint.
+    n_coef : tuple
+        Tuple of integers of the number of coefficients per region.
+
+    Returns
+    -------
+    v : array
+        Vector with 1 where constraint is violated, 0 elsewhere.
+
+    """
+
+    beta = beta.reshape(n_coef[0], n_coef[1])
+    V1 = np.zeros((n_coef[0], n_coef[1]))
+    V2 = np.zeros((n_coef[0], n_coef[1]))
+    V1[:,1:] = np.diff(beta)
+    V1[1:,0] = np.diff(beta[:,0])
+    V2[1:,:] = np.diff(beta, axis=0)
+    V2[0,1:] = np.diff(beta[0,:])
+    v = np.logical_or(V1 > 0, V2 > 0).flatten()
+    return v.astype(int)
+
+def check_constraint_peak_tps(beta, n_coef=None):
+    """Calculate the weight vector v for the peak constraint for tps.
 
     Parameters
     ----------
@@ -151,16 +184,31 @@ def check_constraint_dec_tps(beta):
         Vector with 1 where constraint is violated, 0 elsewhere.
 
     """
-    n_coef = int(np.sqrt(len(beta)))  # !!! only for same n_param per dimension
-    beta = beta.reshape(n_coef, n_coef)
-    V1 = np.zeros((n_coef, n_coef))
-    V2 = np.zeros((n_coef, n_coef))
-    V1[:,1:] = np.diff(beta)
-    V1[1:,0] = np.diff(beta[:,0])
-    V2[1:,:] = np.diff(beta, axis=0)
-    V2[0,1:] = np.diff(beta[0,:])
-    v = np.logical_or(V1 > 0, V2 > 0).flatten()
-    return v.astype(int)
+
+    beta = beta.reshape(n_coef[0], n_coef[1])
+    idx_maximum = np.where(beta == beta.max())
+
+    # upper left quadrant
+    beta_ulq = beta[:idx_maximum[0][0]+1, :idx_maximum[1][0]+1]
+    cc_ul = check_constraint_inc_tps(beta=beta_ulq, n_coef=beta_ulq.shape).reshape(beta_ulq.shape)
+
+    # upper right quadrant
+    beta_urq = beta[:idx_maximum[0][0]+1, idx_maximum[1][0]+1:]
+    beta_urq = beta_urq[:, ::-1]
+    cc_ur = check_constraint_inc_tps(beta=beta_urq, n_coef=beta_urq.shape).reshape(beta_urq.shape)[:, ::-1]
+
+    # lower left quadrant
+    beta_llq = beta[idx_maximum[0][0]+1:, :idx_maximum[1][0]+1]
+    beta_llq = beta_llq[:, ::-1]
+    cc_ll = check_constraint_dec_tps(beta=beta_llq, n_coef=beta_llq.shape).reshape(beta_llq.shape)[:,::-1]
+
+    # lower right quadrant
+    beta_lrq = beta[idx_maximum[0][0]+1:, idx_maximum[1][0]+1:]
+    cc_lr = check_constraint_dec_tps(beta=beta_lrq, n_coef=beta_lrq.shape).reshape(beta_lrq.shape)
+
+    cc = np.vstack((np.hstack((cc_ul, cc_ur)), np.hstack((cc_ll, cc_lr))))
+    return cc.ravel()
+
 
 def check_valley_constraint(beta):
     """Calculate the weight vector v for valley constraint.
@@ -296,13 +344,6 @@ def check_constraint_full_model(model):
 
     assert (model.coef_ is not None), "Please run Model.fit(X, y) first!"
     v = []
-
-    #for i, smooth in enumerate(model.smooths):
-    #    beta = model.coef_[model.coef_list[i]:model.coef_list[i+1]]
-    #    constraint = smooth.constraint
-    #    V = check_constraint(beta, constraint=constraint, smooth_type=type(smooth))
-    #    v += list(np.diag(V))
-    # change to dict
     for val in model.smooths.values():
         V = check_constraint(val.coef_, val.constraint, smooth_type=type(val))
         v += list(np.diag(V).astype(int))

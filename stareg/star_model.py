@@ -99,10 +99,10 @@ class StarModel(BaseEstimator):
         for k,v in self.description_dict.items():
             if k.startswith("s"):
                 smooths[k] = s(x_data=X[:,int(k[2])-1],  n_param=v["n_param"], constraint=v["constraint"], 
-                                y_peak_or_valley=y,lambdas=v["lam"], type_=v["knot_type"])
+                                y=y,lambdas=v["lam"], type_=v["knot_type"])
             elif k.startswith("t"):
                 smooths[k] = tps(x_data=X[:, [int(k[2])-1, int(k[4])-1]],  n_param=list(v["n_param"]), 
-                                constraint=v["constraint"], lambdas=v["lam"], type_=v["knot_type"])
+                                constraint=v["constraint"], y=y, lambdas=v["lam"], type_=v["knot_type"])
         self.basis = np.concatenate([v.basis for v in smooths.values()], axis=1)
         smoothnes_penalty_list = [v.lam["smoothness"] * v.smoothness for v in smooths.values()]
         self.smoothness_penalty_matrix = block_diag(*smoothnes_penalty_list)
@@ -170,7 +170,7 @@ class StarModel(BaseEstimator):
             v.coef_ = self.coef_[self.coef_list[i]:self.coef_list[i+1]]
         return self
 
-    def fit(self, X, y, plot_=True, max_iter=5, cp=None, weight=1000):
+    def fit(self, X, y, plot_=True, max_iter=10, cp=None, weight=1000, verbose=False):
         """Calculate the PIRLS fit for data (X, y).
 
         Calculate the penalized iterative reweighted least squares (PIRLS) fit for
@@ -207,21 +207,40 @@ class StarModel(BaseEstimator):
         self = self.calc_LS_fit(X=X, y=y)
         df = self.create_df_for_beta(beta_init=self.coef_)
         
-        for i in range(max_iter):
+        global_pos = input("Enforce global positivity: (y, n) \n Caution: Only use with non-standardized data! \n")
+        print("Start PIRLS".center(20, "-"))
+        for iter in range(max_iter):
             self.create_constraint_penalty_matrix()
             DVD = self.constraint_penalty_matrix
             DD = self.smoothness_penalty_matrix
             BwB, Bwy = self.basis.T @ np.diag(w) @ self.basis, self.basis.T @ (w * y)
+
+            if global_pos == "y":
+                ypred = self.basis @ self.coef_
+                V = np.diag(ypred < 0).astype(int)
+                # get maximum lambda and multiply it by 10
+                lam = 10*max(list(map(lambda x: max(x.values()),  [v["lam"] for v in self.description_dict.values()])))
+                BVB = lam * self.basis.T @ V @ self.basis
+                print(f"Nr of predictions smaller than zero before iteration {iter}: {np.sum(np.diag(V))}")
+            else:
+                BVB = np.zeros((self.basis.shape[1], self.basis.shape[1]))
+            
             v_old = check_constraint_full_model(model=self)
-            beta_new = (np.linalg.pinv(BwB + DD + DVD) @ Bwy).ravel()
-            self.coef_ = beta_new                       
+            beta_new = (np.linalg.pinv(BwB + DD + DVD + BVB) @ Bwy).ravel()
+            self.coef_ = beta_new       
+            #  update the coefficient values for each smooth
+            for i, v in enumerate(self.smooths.values()):
+                v.coef_ = self.coef_[self.coef_list[i]:self.coef_list[i+1]]
             v_new = check_constraint_full_model(model=self)
             df.loc[i+1] = self.coef_
             delta_v = np.sum(v_new - v_old)
-            for i, v in enumerate(self.smooths.values()):
-                v.coef_ = self.coef_[self.coef_list[i]:self.coef_list[i+1]]
 
+            if verbose:
+                print(f"Iteration {iter+1}".center(20,"-"))
+                print(f"v_old = {sum(v_old)}".center(20, "-"))
+                print(f"v_new = {sum(v_new)}".center(20, "-"), "\n")
             if delta_v == 0: 
+                print("PIRLS converged!".center(20, "-"))
                 break
 
         self.df = df
