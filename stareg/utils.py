@@ -100,28 +100,6 @@ def check_constraint_inc_tps(beta, n_coef=None):
 
 def check_constraint_inc_1_tps(beta):
     """Calculate the weight vector v for first dimension increasing constraint using
-    row-wise first order differences.
-
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for 1D increasing constraint.
-
-    Returns
-    -------
-    v : array
-        Vector with 1 where constraint is violated, 0 elsewhere.
-
-    """
-    n_coef = int(np.sqrt(len(beta)))  # !!! only for same n_param per dimension
-    beta = beta.reshape(n_coef, n_coef)
-    V = np.zeros((n_coef, n_coef))
-    V[:, :-1] = np.diff(beta)
-    v = (V < 0).flatten()
-    return v.astype(int)
-
-def check_constraint_inc_2_tps(beta):
-    """Calculate the weight vector v for second dimension increasing constraint using 
     column-wise first order differences.
 
     Parameters
@@ -139,6 +117,29 @@ def check_constraint_inc_2_tps(beta):
     beta = beta.reshape(n_coef, n_coef)
     V = np.zeros((n_coef, n_coef))
     V[:-1,:] = np.diff(beta, axis=0)
+    v = (V < 0).flatten()
+    return v.astype(int)
+
+def check_constraint_inc_2_tps(beta):
+    """Calculate the weight vector v for second dimension increasing constraint using 
+    row-wise first order differences.
+
+    Parameters
+    ----------
+    beta : array
+        Array of coefficients to test for 1D increasing constraint.
+
+    Returns
+    -------
+    v : array
+        Vector with 1 where constraint is violated, 0 elsewhere.
+
+    """
+
+    n_coef = int(np.sqrt(len(beta)))  # !!! only for same n_param per dimension
+    beta = beta.reshape(n_coef, n_coef)
+    V = np.zeros((n_coef, n_coef))
+    V[:, :-1] = np.diff(beta)
     v = (V < 0).flatten()
     return v.astype(int)
 
@@ -186,24 +187,28 @@ def check_constraint_peak_tps(beta, n_coef=None):
     """
 
     beta = beta.reshape(n_coef[0], n_coef[1])
-    idx_maximum = np.where(beta == beta.max())
+    idx_max = np.where(beta == beta.max())
 
+    if idx_max[0][0] == 0 or (idx_max[1][0] in (10-1, 10-1)):
+        print("Peak coefficients at boundary region!")
+        cc = np.ones(len(beta.ravel()))
+        return cc
     # upper left quadrant
-    beta_ulq = beta[:idx_maximum[0][0]+1, :idx_maximum[1][0]+1]
+    beta_ulq = beta[:idx_max[0][0]+1, :idx_max[1][0]+1]
     cc_ul = check_constraint_inc_tps(beta=beta_ulq, n_coef=beta_ulq.shape).reshape(beta_ulq.shape)
 
     # upper right quadrant
-    beta_urq = beta[:idx_maximum[0][0]+1, idx_maximum[1][0]+1:]
+    beta_urq = beta[:idx_max[0][0]+1, idx_max[1][0]+1:]
     beta_urq = beta_urq[:, ::-1]
     cc_ur = check_constraint_inc_tps(beta=beta_urq, n_coef=beta_urq.shape).reshape(beta_urq.shape)[:, ::-1]
 
     # lower left quadrant
-    beta_llq = beta[idx_maximum[0][0]+1:, :idx_maximum[1][0]+1]
+    beta_llq = beta[idx_max[0][0]+1:, :idx_max[1][0]+1]
     beta_llq = beta_llq[:, ::-1]
     cc_ll = check_constraint_dec_tps(beta=beta_llq, n_coef=beta_llq.shape).reshape(beta_llq.shape)[:,::-1]
 
     # lower right quadrant
-    beta_lrq = beta[idx_maximum[0][0]+1:, idx_maximum[1][0]+1:]
+    beta_lrq = beta[idx_max[0][0]+1:, idx_max[1][0]+1:]
     cc_lr = check_constraint_dec_tps(beta=beta_lrq, n_coef=beta_lrq.shape).reshape(beta_lrq.shape)
 
     cc = np.vstack((np.hstack((cc_ul, cc_ur)), np.hstack((cc_ll, cc_lr))))
