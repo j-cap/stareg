@@ -4,6 +4,7 @@ import unittest
 import numpy as np
 from stareg.utils import check_constraint, check_constraint_full_model
 from stareg.utils import check_valley_constraint, check_peak_constraint
+from stareg.utils import check_constraint_inc_1_tps, check_constraint_inc_2_tps
 from stareg.star_model import StarModel
 
 
@@ -180,7 +181,33 @@ class TestUtils(unittest.TestCase):
         v = check_constraint_full_model(model=M)
         self.assertEqual(v.sum(), self.n_param-2)
 
+    def test_check_constraint_inc_1_tps(self):
+        beta = np.array([[0,0,0,3,0], 
+                         [1,2,1,2,1],
+                         [2,3,2,3,4],
+                         [1,4,4,2,4],
+                         [5,5,5,5,5]])
+        cc = check_constraint_inc_1_tps(beta.ravel()).reshape(beta.shape)
+        solution = np.array([[0,0,0,1,0],
+                             [0,0,0,0,0],
+                             [1,0,0,1,0],
+                             [0,0,0,0,0],
+                             [0,0,0,0,0]])
+        self.assertEqual(solution, cc)
 
+    def test_check_constraint_inc_2_tps(self):
+        beta = np.array([[0,0,0,3,0], 
+                         [1,2,1,2,1],
+                         [2,3,2,3,4],
+                         [1,4,4,2,4],
+                         [5,5,5,5,5]])
+        cc = check_constraint_inc_2_tps(beta.ravel()).reshape(beta.shape)
+        solution = np.array([[0,0,0,1,0],
+                             [0,1,0,1,0],
+                             [0,1,0,0,0],
+                             [0,0,1,0,0],
+                             [0,0,0,0,0]])
+        self.assertEqual(solution, cc)
 
 
 if __name__ == "__main__":
