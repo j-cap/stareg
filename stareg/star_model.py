@@ -137,7 +137,7 @@ class StarModel(BaseEstimator):
             b = v.coef_
             P = v.penalty_matrix
             V = check_constraint(beta=b, constraint=v.constraint, smooth_type=type(v))
-            cp_list.append(v.lam["constraint"] * (P.real.T @ V @ P.real))
+            cp_list.append(v.lam["constraint"] * (P.real.T @ V @ P.real).round(4))
         self.constraint_penalty_matrix = block_diag(*cp_list)
 
     

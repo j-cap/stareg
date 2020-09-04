@@ -187,28 +187,30 @@ def check_constraint_peak_tps(beta, n_coef=None):
     """
 
     beta = beta.reshape(n_coef[0], n_coef[1])
-    idx_max = np.where(beta == beta.max())
-
-    if idx_max[0][0] == 0 or (idx_max[1][0] in (10-1, 10-1)):
-        print("Peak coefficients at boundary region!")
+    # Find maximum coef_ without the boundary coefficients 
+    idx_max = np.where(beta[1:-1, 1:-1] == beta[1:-1,1:-1].max())
+    idx_max = idx_max[0][0]+1, idx_max[1][0]+1
+    
+    if idx_max[0] == 0 or (idx_max[1] in (n_coef[0]-1, n_coef[1]-1)):
+        print("Peak coefficients in the boundary region!")
         cc = np.ones(len(beta.ravel()))
         return cc
     # upper left quadrant
-    beta_ulq = beta[:idx_max[0][0]+1, :idx_max[1][0]+1]
+    beta_ulq = beta[:idx_max[0]+1, :idx_max[1]+1]
     cc_ul = check_constraint_inc_tps(beta=beta_ulq, n_coef=beta_ulq.shape).reshape(beta_ulq.shape)
 
     # upper right quadrant
-    beta_urq = beta[:idx_max[0][0]+1, idx_max[1][0]+1:]
+    beta_urq = beta[:idx_max[0]+1, idx_max[1]+1:]
     beta_urq = beta_urq[:, ::-1]
     cc_ur = check_constraint_inc_tps(beta=beta_urq, n_coef=beta_urq.shape).reshape(beta_urq.shape)[:, ::-1]
 
     # lower left quadrant
-    beta_llq = beta[idx_max[0][0]+1:, :idx_max[1][0]+1]
+    beta_llq = beta[idx_max[0]+1:, :idx_max[1]+1]
     beta_llq = beta_llq[:, ::-1]
     cc_ll = check_constraint_dec_tps(beta=beta_llq, n_coef=beta_llq.shape).reshape(beta_llq.shape)[:,::-1]
 
     # lower right quadrant
-    beta_lrq = beta[idx_max[0][0]+1:, idx_max[1][0]+1:]
+    beta_lrq = beta[idx_max[0]+1:, idx_max[1]+1:]
     cc_lr = check_constraint_dec_tps(beta=beta_lrq, n_coef=beta_lrq.shape).reshape(beta_lrq.shape)
 
     cc = np.vstack((np.hstack((cc_ul, cc_ur)), np.hstack((cc_ll, cc_lr))))
