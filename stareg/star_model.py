@@ -104,7 +104,7 @@ class StarModel(BaseEstimator):
                 smooths[k] = tps(x_data=X[:, [int(k[2])-1, int(k[4])-1]],  n_param=list(v["n_param"]), 
                                 constraint=v["constraint"], y=y, lambdas=v["lam"], type_=v["knot_type"])
         self.basis = np.concatenate([v.basis for v in smooths.values()], axis=1)
-        smoothnes_penalty_list = [v.lam["smoothness"] * v.smoothness for v in smooths.values()]
+        smoothnes_penalty_list = [(1/v.smoothness.shape[1]) * v.lam["smoothness"] * v.smoothness for v in smooths.values()]
         self.smoothness_penalty_matrix = block_diag(*smoothnes_penalty_list)
         n_coef_list = [0] + [np.product(smooth.n_param) for smooth in smooths.values()]
         self.coef_list = np.cumsum(n_coef_list)
@@ -137,7 +137,7 @@ class StarModel(BaseEstimator):
             b = v.coef_
             P = v.penalty_matrix
             V = check_constraint(beta=b, constraint=v.constraint, smooth_type=type(v))
-            cp_list.append(v.lam["constraint"] * (P.real.T @ V @ P.real).round(4))
+            cp_list.append((1/P.shape[1])*v.lam["constraint"] * (P.real.T @ V @ P.real).round(4))
         self.constraint_penalty_matrix = block_diag(*cp_list)
 
     
@@ -846,7 +846,7 @@ class StarModel(BaseEstimator):
         residual_std = residuals / (sigma_hat * np.sqrt(1 - np.diag(H)))
         sqr_residual_std = np.sqrt(np.abs(residual_std))
         # quantile
-        osm, osr = probplot(residual_std, dist="norm")
+        osm, _ = probplot(residual_std, dist="norm")
         # Cooks distance
         CD = residuals**2 / (np.trace(H) * self.mse) * (np.diag(H) / (1 - np.diag(H))**2)
         # high leverage points

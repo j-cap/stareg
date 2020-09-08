@@ -415,61 +415,7 @@ def add_vert_line(fig, x0=0, y0=0, y1=1):
     """
     fig.add_shape(dict(type="line", x0=x0, x1=x0, y0=y0, y1=1.2*y1, 
                        line=dict(color="LightSeaGreen", width=1)))
-    
-def test_model_against_constraint(model, dim=None, plot_=False):
-    """Test the model against the constraint on a fine prediction grid. 
-    
-    Parameters
-    ----------
-    model : StarModel()
-        Instance of StarModel.
-    plot_ : boolean
-        Indicator whether to plot the violated constraints.
-    dim : int
-        Number of dimension.
 
-    Returns
-    -------
-    test : array
-        Array of 1s where the constraint is violated, 0 elsewhere.
-        
-    """
-    
-    n_samples = 1000
-    x_test = np.linspace(0,1,n_samples*dim).reshape((-1, dim))
-    y_pred = model.predict(X=x_test)
-    v = []
-    constraints = [val.constraint for val in model.smooths.values()]
-    for constraint in constraints:
-        if constraint == "inc":
-            test = np.diff(y_pred) < 0
-        elif constraint == "dec":
-            test = np.diff(y_pred) > 0
-        elif constraint == "conv":
-            test = np.diff(np.diff(y_pred)) < 0
-        elif constraint == "conc":
-            test = np.diff(np.diff(y_pred)) > 0
-        elif constraint == "peak":
-            test = check_peak_constraint(beta=y_pred)
-        elif constraint == "multi-peak":
-            test = check_multi_peak_constraint(beta=y_pred)
-        elif constraint == "valley":
-            test = check_valley_constraint(beta=y_pred)
-        elif constraint == "multi-valley":
-            test = check_multi_valley_constraint(beta=y_pred)
-        elif constraint == "peak-and-valley":
-            test = check_peak_and_valley_constraint(beta=y_pred)
-        v.append(test)
-
-    alltests = [item for sublist in v for item in sublist]
-    alltests = np.array(alltests).astype(np.int)
-    
-    if plot_:
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True)        
-        fig.add_trace(go.Scatter(x=x_test[:,0], y=y_pred, name="Fit"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=x_test[:,0], y=test, mode="markers", name=constraint), row=2, col=1)
-        fig.show()
-    return alltests
 
 def test_model_against_constraints(model):
     """Test all submodels against the constraints for the submodel. 
@@ -498,5 +444,5 @@ def test_model_against_constraints(model):
         alltests.append(t.astype(int))
     ICP_list = list(map(lambda x: sum(x) / len(x), alltests))
     ICP = sum(ICP_list)
-    return ICP
+    return ICP, ICP_list
 
