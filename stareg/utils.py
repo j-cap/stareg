@@ -29,18 +29,20 @@ def check_constraint(beta, constraint, smooth_type=None):
     b_diff = np.diff(beta)
     b_diff_diff = np.diff(b_diff)
     if str(smooth_type) == "<class 'stareg.smooth.Smooths'>":
-        if constraint == "inc":
-            v = [0 if i > 0 else 1 for i in b_diff] 
+        if constraint == "none":
+            v = np.zeros(len(beta))
+        elif constraint == "inc":
+            v = (np.diff(beta, 1) <= 0).astype(int)
         elif constraint == "dec":
-            v = [0 if i < 0 else 1 for i in b_diff] 
+            v = (np.diff(beta, 1) >= 0).astype(int)
         elif constraint == "conv":
-            v = [0 if i > 0 else 1 for i in b_diff_diff] 
+            v = (np.diff(beta, 2) <= 0).astype(int)
         elif constraint == "conc":
-            v = [0 if i < 0 else 1 for i in b_diff_diff] 
+            v = (np.diff(beta, 2) >= 0).astype(int)
         elif constraint == "smooth":
             v = np.zeros(len(b_diff_diff))
         elif constraint == "peak":
-            v = check_peak_constraint(beta=beta)
+            v = check_constraint_peak(beta=beta)
         elif constraint == "multi-peak":
             v = check_multi_peak_constraint(beta=beta)
         elif constraint == "valley":
@@ -260,13 +262,15 @@ def check_multi_valley_constraint(beta):
     v = np.array(list(v1)+list(v2))
     return v.astype(np.int)
 
-def check_peak_constraint(beta):
+def check_constraint_peak(beta, peak_idx=None):
     """Calculate the weight vector v for peak constraint.
 
     Parameters
     ----------
     beta : array
         Array of coefficients to test for peak constraint.
+    peak_idx : int
+        Index of the peak in the data.
 
     Returns
     -------
@@ -300,8 +304,8 @@ def check_multi_peak_constraint(beta):
 
     peaks, _ = find_peaks(x=beta, prominence=np.std(beta), distance=int(len(beta)/3))
     middle_spline = int(np.mean(peaks))
-    v1 = check_peak_constraint(beta=beta[:middle_spline+1])
-    v2 = check_peak_constraint(beta=beta[middle_spline:])
+    v1 = check_constraint_peak(beta=beta[:middle_spline+1])
+    v2 = check_constraint_peak(beta=beta[middle_spline:])
     v = np.array(list(v1)+list(v2))
     return v.astype(np.int)
 
@@ -327,9 +331,9 @@ def check_peak_and_valley_constraint(beta):
 
     if peak > valley:
         v1 = check_valley_constraint(beta=beta[:middle_spline+1])
-        v2 = check_peak_constraint(beta=beta[middle_spline:])
+        v2 = check_constraint_peak(beta=beta[middle_spline:])
     elif peak < valley:
-        v1 = check_peak_constraint(beta=beta[:middle_spline+1])
+        v1 = check_constraint_peak(beta=beta[:middle_spline+1])
         v2 = check_valley_constraint(beta=beta[middle_spline:])
     v = np.array(list(v1)+list(v2))
     return v.astype(np.int)

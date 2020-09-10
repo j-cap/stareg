@@ -107,7 +107,9 @@ class PenaltyMatrix():
         -------
         peak : np.ndarray
             Peak constraint matrix of size (n_param-1 x n_param)
-
+        peak_idx : int
+            Index of the peak in the data.
+            
         """
         # TODO:
         # - [ ] boundary cases if peak is far left or far right
@@ -123,7 +125,7 @@ class PenaltyMatrix():
         dec_matrix = -1 * self.d1_difference_matrix(n_param= n_param - peak_idx-1)
         peak = block_diag(inc_matrix[:,:-1],  dec_matrix)
         peak[peak_idx, peak_idx] = 0
-        return peak
+        return peak, peak_idx
         
     def valley_matrix(self, n_param=0, y_data=None, basis=None):
         """Create the valley constraint matrix. 

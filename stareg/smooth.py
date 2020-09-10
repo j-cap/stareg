@@ -43,17 +43,19 @@ class Smooths(Bspline):
         self.bspline_basis(x_data=self.x_data, k=self.n_param, type_=type_)
         self.smoothness = self.smoothness_matrix(n_param=self.n_param).T @ self.smoothness_matrix(n_param=self.n_param)
         # Create the penalty matrix for the given penalty
-        if constraint == "inc":
+        if constraint == "none":
+            self.penalty_matrix = np.zeros((n_param, n_param))
+        elif constraint == "inc":
             self.penalty_matrix = self.d1_difference_matrix(n_param=self.n_param)
         elif constraint == "dec":
-            self.penalty_matrix = -1 * self.d1_difference_matrix(n_param=self.n_param) 
+            self.penalty_matrix = self.d1_difference_matrix(n_param=self.n_param) 
         elif constraint == "conv":
             self.penalty_matrix = self.d2_difference_matrix(n_param=self.n_param)
         elif constraint == "conc":
-            self.penalty_matrix = -1 * self.d2_difference_matrix(n_param=self.n_param)
+            self.penalty_matrix = self.d2_difference_matrix(n_param=self.n_param)
         elif constraint == "peak":
             assert (y is not None), self.msg_include_ydata
-            self.penalty_matrix = self.peak_matrix(
+            self.penalty_matrix, self.peak_idx = self.peak_matrix(
                 n_param=self.n_param, basis=self.basis, y_data=y
             )
         elif constraint == "valley":
