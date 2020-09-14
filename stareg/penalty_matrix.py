@@ -122,7 +122,7 @@ class PenaltyMatrix():
         border = np.argwhere(basis[peak,:] > 0)
         peak_idx = border[-3][1]
         inc_matrix = self.d1_difference_matrix(n_param=peak_idx+2)
-        dec_matrix = -1 * self.d1_difference_matrix(n_param= n_param - peak_idx-1)
+        dec_matrix = self.d1_difference_matrix(n_param= n_param - peak_idx-1)
         peak = block_diag(inc_matrix[:,:-1],  dec_matrix)
         peak[peak_idx, peak_idx] = 0
         return peak, peak_idx
@@ -159,11 +159,11 @@ class PenaltyMatrix():
         assert (len(valley) == 1), "Valley not found!"
         border = np.argwhere(basis[valley,:] > 0)
         valley_idx = border[-3][1]
-        dec_matrix = -1*self.d1_difference_matrix(n_param=valley_idx+2)
+        dec_matrix = self.d1_difference_matrix(n_param=valley_idx+2)
         inc_matrix = self.d1_difference_matrix(n_param= n_param - valley_idx-1)
         valley = block_diag(dec_matrix[:,:-1],  inc_matrix)
         valley[valley_idx, valley_idx] = 0
-        return valley
+        return valley, valley_idx
         
     def multi_peak_matrix(self, n_param=0, y_data=None, basis=None):
         """Find 2 peaks in the data and generate the penalty matrix.
@@ -197,8 +197,8 @@ class PenaltyMatrix():
         local_valley, _ = find_peaks(x=-1*y_data[peaks[0]:peaks[1]], distance=int(len(y_data[peaks[0]:peaks[1]])))
         assert (len(local_valley) == 1), "Local valley not found!"
         valley_idx = np.argwhere(basis[peaks[0]+local_valley[0], :] > 0)[1][0]
-        P1 = self.peak_matrix(n_param=valley_idx, y_data=y_data[:peaks[0]+local_valley[0]], basis=basis)
-        P2 = self.peak_matrix(n_param=n_param-valley_idx, y_data=y_data[peaks[0]+local_valley[0]:], basis=basis)
+        P1 = self.peak_matrix(n_param=valley_idx, y_data=y_data[:peaks[0]+local_valley[0]], basis=basis)[0]
+        P2 = self.peak_matrix(n_param=n_param-valley_idx, y_data=y_data[peaks[0]+local_valley[0]:], basis=basis)[0]
         P = block_diag(P1[:,:-1], 0, P2)
         P[valley_idx-2, valley_idx-1] = -1
         return P
@@ -235,8 +235,8 @@ class PenaltyMatrix():
         local_peak, _ = find_peaks(x=y_data[valleys[0]:valleys[1]], distance=int(len(y_data[valleys[0]:valleys[1]])))
         assert (len(local_peak) == 1), "Local peak not found!"
         peak_idx = np.argwhere(basis[valleys[0]+local_peak[0], :] > 0)[1][0]
-        V1 = self.valley_matrix(n_param=peak_idx, y_data=y_data[:valleys[0]+local_peak[0]], basis=basis)
-        V2 = self.valley_matrix(n_param=n_param-peak_idx, y_data=y_data[valleys[0]+local_peak[0]:], basis=basis)
+        V1 = self.valley_matrix(n_param=peak_idx, y_data=y_data[:valleys[0]+local_peak[0]], basis=basis)[0]
+        V2 = self.valley_matrix(n_param=n_param-peak_idx, y_data=y_data[valleys[0]+local_peak[0]:], basis=basis)[0]
         V = block_diag(V1[:,:-1], 0, V2)
         V[peak_idx-2,peak_idx-1] = 1
         return V

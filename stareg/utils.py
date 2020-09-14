@@ -62,7 +62,7 @@ def check_constraint(beta, constraint, smooth_type=None):
         elif constraint == "dec":
             v = check_constraint_dec_tps(beta=beta)
         elif constraint == "smooth":
-            v = np.zeros(len(beta)-2)
+            v = np.zeros(len(beta))
         elif constraint == "peak":
             v = check_constraint_peak_tps(beta=beta, n_coef=(int(np.sqrt(len(beta))), int(np.sqrt(len(beta)))))
         elif constraint == "none":

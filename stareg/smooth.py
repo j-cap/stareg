@@ -152,8 +152,8 @@ class TensorProductSmooths(TensorProductSpline):
             self.penalty_matrix = sqrtm(K)
         elif constraint == "peak":
             #  use basic scheme according to Fahrmeir, p. 508
-            peak1 = self.peak_matrix(n_param=self.n_param[0], y_data=y, basis=self.basis_x1)
-            peak2 = self.peak_matrix(n_param=self.n_param[1], y_data=y, basis=self.basis_x2)
+            peak1 = self.peak_matrix(n_param=self.n_param[0], y_data=y, basis=self.basis_x1)[0]
+            peak2 = self.peak_matrix(n_param=self.n_param[1], y_data=y, basis=self.basis_x2)[0]
             K1, K2 = peak1.T @ peak1, peak2.T @ peak2
             K = np.kron(np.eye(self.n_param[1]), K1) + np.kron(K2, np.eye(self.n_param[0]))
             self.penalty_matrix = sqrtm(K)
