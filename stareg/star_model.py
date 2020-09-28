@@ -5,6 +5,7 @@
 
 import pprint
 import copy
+import sys
 import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
@@ -35,7 +36,7 @@ class StarModel(BaseEstimator):
 
     """
 
-    def __init__(self, description):
+    def __init__(self, description=None):
         """Initialitation of the Model using the nested tuple 'description'. 
 
         Parameters
@@ -61,6 +62,10 @@ class StarModel(BaseEstimator):
             ).
                         
         """
+        if description == None:
+            print("Please include a model description of the form:")
+            print("Smooth of Variable i -- Constraint Type -- Number of Splines -- (lam_smoothnes, lam_constraint) -- Grid Placement)")
+            sys.exit()
 
         self.description_str = description
         self.description_dict = {
@@ -133,6 +138,7 @@ class StarModel(BaseEstimator):
         #     [ ]  include TPS shape penalty
                
         cp_list = []
+        self.constraint_penalty_matrix = None
         for v in self.smooths.values():
             b = v.coef_
             P = v.penalty_matrix
@@ -170,7 +176,7 @@ class StarModel(BaseEstimator):
             v.coef_ = self.coef_[self.coef_list[i]:self.coef_list[i+1]]
         return self
 
-    def fit(self, X, y, plot_=True, max_iter=10, cp=None, weight=1000, verbose=False):
+    def fit(self, X, y, plot_=True, max_iter=10, cp=None, weight=1000, verbose=False, global_pos=False):
         """Calculate the PIRLS fit for data (X, y).
 
         Calculate the penalized iterative reweighted least squares (PIRLS) fit for
@@ -190,6 +196,10 @@ class StarModel(BaseEstimator):
             Points for weighted fit, if None they are ignored.
         weight : int
             Weight value for weighted fit. 
+        verbose: boolean
+            Verbose printing.
+        global_pos : boolean
+            Whether the global positivity constraint should be applied or not.
         
         Returns 
         -------
@@ -207,15 +217,13 @@ class StarModel(BaseEstimator):
         self = self.calc_LS_fit(X=X, y=y)
         df = self.create_df_for_beta(beta_init=self.coef_)
         
-        global_pos = input("Enforce global positivity: (y, n) \n Caution: Only use with non-standardized data! \n")
-        print("Start PIRLS".center(20, "-"))
         for iter in range(max_iter):
             self.create_constraint_penalty_matrix()
             DVD = self.constraint_penalty_matrix
             DD = self.smoothness_penalty_matrix
             BwB, Bwy = self.basis.T @ np.diag(w) @ self.basis, self.basis.T @ (w * y)
 
-            if global_pos == "y":
+            if global_pos:
                 ypred = self.basis @ self.coef_
                 V = np.diag(ypred < 0).astype(int)
                 # get maximum lambda and multiply it by 10
@@ -239,9 +247,14 @@ class StarModel(BaseEstimator):
                 print(f"Iteration {iter+1}".center(20,"-"))
                 print(f"v_old = {sum(v_old)}".center(20, "-"))
                 print(f"v_new = {sum(v_new)}".center(20, "-"), "\n")
-            if delta_v == 0: 
+            elif verbose and (delta_v == 0):
                 print("PIRLS converged!".center(20, "-"))
                 break
+            else:
+                if delta_v == 0: 
+                    break
+                else:
+                    continue
 
         self.df = df
         self.mse = np.round(mean_squared_error(y, self.basis @ self.coef_), 7)       
@@ -656,8 +669,55 @@ class StarModel(BaseEstimator):
         GCV = (1/n) * np.sum((y.ravel() - y_hat.ravel())**2 / (1 - trace/n))
         return GCV
 
+    def GCV_smoothingParameter(self, X, y, n_grid, p_min=1e-4, plot_=False):
+        """Carry out the generalized cross validation for the smoothing paramter $\lambda_s$.
+
+        !!! Only for 1D.  !!!
+
+        This iterates over a grid with n_grid**n_constraint. Returns the model for the best
+        smoothing parameter and the constraint parameter set to 1000*best_smoothing_parameter.
+
+        Parameters
+        ----------
+        X : nd.array
+            Data of size (n_samples, n_dimensions).
+        y : array
+            Target data of size (n_samples,).
+        n_grid : int
+            Number of distinct parameter values to try.
+        p_min : float
+            Minimum parameter value.
+        plot_ : bool
+            Indicator of whether to plot the fit.
+        
+        Returns
+        -------
+        self : object
+            Returns the model with the best set of lambdas according to the GCV score.
+
+        """
+        X, y = check_X_y(X=X, y=y)
+        # change lambda and calc model
+        lam_grid = np.geomspace(p_min, 1e3, num=n_grid)
+        # CV for lambda-smoothness
+        gcvs_smooth = {}
+        for l in lam_grid:
+            self.description_dict["s(1)"]["lam"]["smoothness"] = l
+            self.description_dict["s(1)"]["lam"]["constraint"] = 0
+            self.fit(X=X, y=y, plot_=False)
+            
+            gcvs_smooth[str(l)] = self.calc_GCV_score(y=y)
+
+        best_lam_smooth = float(min(gcvs_smooth, key=gcvs_smooth.get))
+        self.description_dict["s(1)"]["lam"]["smoothness"] = best_lam_smooth
+        self.description_dict["s(1)"]["lam"]["constraint"] = 1000*best_lam_smooth
+
+        self.fit(X=X, y=y, plot_=plot_)
+        return self
+
+
     def calc_GCV(self, X, y, n_grid=5, p_min=1e-4, plot_=False):
-        """Carry out the generalized cross validation for the model.
+        """Carry out the generalized cross validation for all $\lambda$ the model.
 
         This iterates over a grid with n_grid**(n_constraint*2). For each smooth, there are
         2 lambdas given (one for smoothing, one for the constraint), so the size of the grid 
