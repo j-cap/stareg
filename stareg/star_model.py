@@ -265,6 +265,8 @@ class StarModel(BaseEstimator):
 
     def predict(self, X, extrapol_type="zero", depth=10):
         """Prediction of the trained model on the data in X.
+
+        !!! Only for normalized data !!!
         
         Parameters
         ----------
@@ -698,7 +700,7 @@ class StarModel(BaseEstimator):
         """
         X, y = check_X_y(X=X, y=y)
         # change lambda and calc model
-        lam_grid = np.geomspace(p_min, 1e3, num=n_grid)
+        lam_grid = np.geomspace(p_min, 1e3, num=n_grid).round(4)
         # CV for lambda-smoothness
         gcvs_smooth = {}
         for l in lam_grid:
