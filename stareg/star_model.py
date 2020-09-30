@@ -167,8 +167,12 @@ class StarModel(BaseEstimator):
         
         """
         
-        self.create_basis(X=X, y=y.ravel())    
-        fitting = lstsq(a=self.basis, b=y, rcond=None)
+        self.create_basis(X=X, y=y.ravel())
+        try:    
+            fitting = lstsq(a=self.basis, b=y, rcond=None)
+        except np.linalg.LinAlgError:
+            beta_0 = np.linalg.pinv(self.basis.T @ self.basis) @ self.basis.T * y
+
         beta_0 = fitting[0].ravel()
         self.coef_, self.LS_coef_ = beta_0, beta_0        
         #  update the coefficient values for each smooth

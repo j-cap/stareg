@@ -84,6 +84,7 @@ class Bspline(PenaltyMatrix):
         X = np.zeros((n, k))
         
         xmin, xmax = np.min(x_data), np.max(x_data)
+        
         if type_ == "quantile":
             xk = np.quantile(a=x_data, q=np.linspace(0,1,k - m))
         elif type_ == "equidistant":
