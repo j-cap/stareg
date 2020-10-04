@@ -41,7 +41,24 @@ class Smooths(Bspline):
             self.lam = lambdas
         self.knot_type = type_
         self.bspline_basis(x_data=self.x_data, k=self.n_param, type_=type_)
-        self.smoothness = self.smoothness_matrix(n_param=self.n_param).T @ self.smoothness_matrix(n_param=self.n_param)
+        
+        # include the "grid weights" when we use quantile based knot placement 
+        smoothness = self.smoothness_matrix(n_param=self.n_param)
+        if type_ == "quantile":
+            eff_area = []
+            for i in range(n_param):
+                eff_area.append(self.knots[i+4] - self.knots[i])
+            inv_eff_area = 1 / np.array(eff_area)
+
+        elif type_ == "equidistant":
+            inv_eff_area = 1 / np.ones(n_param)
+        if np.any(inv_eff_area > 1e5):
+            print("Inverse of Effective Area is very large! => Downscaling")
+            inv_eff_area /= 1e5
+        self.inv_eff_area = inv_eff_area
+        smoothness = smoothness * inv_eff_area
+        self.smoothness = smoothness.T @ smoothness
+        
         # Create the penalty matrix for the given penalty
         if constraint == "none":
             self.penalty_matrix = np.zeros((n_param, n_param))

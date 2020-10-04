@@ -109,6 +109,7 @@ class StarModel(BaseEstimator):
                 smooths[k] = tps(x_data=X[:, [int(k[2])-1, int(k[4])-1]],  n_param=list(v["n_param"]), 
                                 constraint=v["constraint"], y=y, lambdas=v["lam"], type_=v["knot_type"])
         self.basis = np.concatenate([v.basis for v in smooths.values()], axis=1)
+        # add a normalization factor if different numbers of splines are used for different smooths
         smoothnes_penalty_list = [(1/v.smoothness.shape[1]) * v.lam["smoothness"] * v.smoothness for v in smooths.values()]
         self.smoothness_penalty_matrix = block_diag(*smoothnes_penalty_list)
         n_coef_list = [0] + [np.product(smooth.n_param) for smooth in smooths.values()]
@@ -672,11 +673,34 @@ class StarModel(BaseEstimator):
         y_hat = self.basis @ self.coef_
         n = y.shape[0]
         trace = np.trace(self.calc_hat_matrix())
-        GCV = (1/n) * np.sum((y.ravel() - y_hat.ravel())**2 / (1 - trace/n))
+        GCV = (1/n) * np.sum( ((y.ravel() - y_hat.ravel()) / (1 - trace/n))**2   )
         return GCV
 
-    def GCV_smoothingParameter(self, X, y, n_grid, p_min=1e-4, plot_=False):
-        """Carry out the generalized cross validation for the smoothing paramter $\lambda_s$.
+    def calc_CV_score(self, y):
+        """Calculates the cross validation score according to Fahrmeir, Regression 2013 p.480.
+        
+        Parameter
+        ---------
+        y : array
+            Target data of size (n_samples,). 
+
+        Returns
+        -------
+        GCV : float
+            Generalized cross validation score.
+        
+        """
+
+        y_hat = self.basis @ self.coef_
+        n = y.shape[0]
+        H = self.calc_hat_matrix()
+        GCV = (1/n) * np.sum( ((y.ravel()-y_hat.ravel()) / (1-np.diag(H)) )**2 )
+        return GCV
+
+
+    def GCV_smoothingParameter(self, X, y, n_grid, p_min=1e-4, p_max=1e3):
+        """Carry out the generalized cross validation for the smoothing paramter $\lambda_s$,
+            as well as the cross validation.
 
         !!! Only for 1D.  !!!
 
@@ -693,8 +717,8 @@ class StarModel(BaseEstimator):
             Number of distinct parameter values to try.
         p_min : float
             Minimum parameter value.
-        plot_ : bool
-            Indicator of whether to plot the fit.
+        p_max : float
+            Maximum parameter value.
         
         Returns
         -------
@@ -704,23 +728,56 @@ class StarModel(BaseEstimator):
         """
         X, y = check_X_y(X=X, y=y)
         # change lambda and calc model
-        lam_grid = np.geomspace(p_min, 1e3, num=n_grid).round(4)
+        lam_grid = np.geomspace(p_min, p_max, num=n_grid).round(4)
         # CV for lambda-smoothness
-        gcvs_smooth = {}
+        gcvs_smooth, cvs_smooth = {}, {}
         for l in lam_grid:
             self.description_dict["s(1)"]["lam"]["smoothness"] = l
             self.description_dict["s(1)"]["lam"]["constraint"] = 0
             self.fit(X=X, y=y, plot_=False)
             
             gcvs_smooth[str(l)] = self.calc_GCV_score(y=y)
+            cvs_smooth[str(l)] = self.calc_CV_score(y=y)
 
         best_lam_smooth = float(min(gcvs_smooth, key=gcvs_smooth.get))
         self.description_dict["s(1)"]["lam"]["smoothness"] = best_lam_smooth
         self.description_dict["s(1)"]["lam"]["constraint"] = 1000*best_lam_smooth
 
-        self.fit(X=X, y=y, plot_=plot_)
+        self.fit(X=X, y=y, plot_=False)
+        self.gcv_smoothness = gcvs_smooth
+        self.cv_smoothness = cvs_smooth
+
         return self
 
+    def plot_GCV_curve(self):
+        """Plot the GCV-score curve over the lambdas."""
+        if hasattr(self, "gcv_smoothness"):
+            lams = list(map(float, self.gcv_smoothness.keys()))
+            gcv_scores = list(self.gcv_smoothness.values())
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=lams, y=gcv_scores, mode="lines", 
+                    line=dict(width=2), name="Generalized Cross Validation Score"))
+            fig.update_xaxes(type="log", title=r"$\lambda$")
+            fig.show()
+        else:
+            print("Run Generalized Cross Validation First!")
+
+    def plot_CV_curve(self):
+        """Plot the CV-score curve over the lambdas."""
+        if hasattr(self, "cv_smoothness"):
+            lams = list(map(float, self.cv_smoothness.keys()))
+            cv_scores = list(self.cv_smoothness.values())
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=lams, y=cv_scores, mode="lines", 
+                    line=dict(width=2), name="Cross Validation Score"))
+            fig.update_xaxes(type="log", title=r"$\lambda$")
+            fig.show()
+        else:
+            print("Run Cross Validation First!")
 
     def calc_GCV(self, X, y, n_grid=5, p_min=1e-4, plot_=False):
         """Carry out the generalized cross validation for all $\lambda$ the model.

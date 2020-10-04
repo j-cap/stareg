@@ -93,9 +93,10 @@ class Bspline(PenaltyMatrix):
             print("Knot placement type is not supported!!!")
             print("Either 'quantile' or 'equidistant'!")
 
-        dx = np.min(np.diff(xk))
-        xk = np.insert(xk, 0, np.linspace(xmin-(m+1)*dx, xmin, 3, endpoint=False))
-        xk = np.append(xk, np.linspace(xmax+dx, xmax+(m+1)*dx, 3, endpoint=True))
+        dx_left = np.diff(xk)[0]
+        dx_right = np.diff(xk)[-1]
+        xk = np.insert(xk, 0, np.linspace(xmin-(m+1)*dx_left, xmin, 3, endpoint=False))
+        xk = np.append(xk, np.linspace(xmax+dx_right, xmax+(m+1)*dx_right , 3, endpoint=True))
         
         for i in range(k):
             X[:,i] = self.bspline(x=x_data, knots=xk, i=i, m=m)
