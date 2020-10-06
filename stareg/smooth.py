@@ -48,15 +48,17 @@ class Smooths(Bspline):
             eff_area = []
             for i in range(n_param):
                 eff_area.append(self.knots[i+4] - self.knots[i])
-            inv_eff_area = 1 / np.array(eff_area)
-
+            eff_area = np.array(eff_area)
         elif type_ == "equidistant":
-            inv_eff_area = 1 / np.ones(n_param)
-        if np.any(inv_eff_area > 1e5):
+            eff_area = np.ones(n_param) * (self.knots[2]-self.knots[1])
+        # take inverse of the effective area
+        inv_norm_eff_area = (1 / eff_area) # / sum(1 / eff_area)
+        
+        if np.any(inv_norm_eff_area > 1e5):
             print("Inverse of Effective Area is very large! => Downscaling")
-            inv_eff_area /= 1e5
-        self.inv_eff_area = inv_eff_area
-        smoothness = smoothness * inv_eff_area
+            inv_norm_eff_area /= 1e5
+        self.inv_eff_area = inv_norm_eff_area
+        smoothness = smoothness * inv_norm_eff_area
         self.smoothness = smoothness.T @ smoothness
         
         # Create the penalty matrix for the given penalty

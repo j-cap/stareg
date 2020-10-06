@@ -144,7 +144,7 @@ class StarModel(BaseEstimator):
             b = v.coef_
             P = v.penalty_matrix
             V = check_constraint(beta=b, constraint=v.constraint, smooth_type=type(v))
-            cp_list.append((1/P.shape[1])*v.lam["constraint"] * (P.real.T @ V @ P.real).round(4))
+            cp_list.append(v.lam["constraint"] * (P.real.T @ V @ P.real).round(4))
         self.constraint_penalty_matrix = block_diag(*cp_list)
 
     
@@ -248,10 +248,11 @@ class StarModel(BaseEstimator):
             df.loc[i+1] = self.coef_
             delta_v = np.sum(v_new - v_old)
 
-            if verbose:
+            if verbose and (delta_v != 0):
                 print(f"Iteration {iter+1}".center(20,"-"))
                 print(f"v_old = {sum(v_old)}".center(20, "-"))
                 print(f"v_new = {sum(v_new)}".center(20, "-"), "\n")
+                print("Delta_v = ", delta_v)
             elif verbose and (delta_v == 0):
                 print("PIRLS converged!".center(20, "-"))
                 break
@@ -728,20 +729,24 @@ class StarModel(BaseEstimator):
         """
         X, y = check_X_y(X=X, y=y)
         # change lambda and calc model
-        lam_grid = np.geomspace(p_min, p_max, num=n_grid).round(4)
+        lam_grid = np.geomspace(p_min, p_max, num=n_grid)
         # CV for lambda-smoothness
         gcvs_smooth, cvs_smooth = {}, {}
         for l in lam_grid:
-            self.description_dict["s(1)"]["lam"]["smoothness"] = l
-            self.description_dict["s(1)"]["lam"]["constraint"] = 0
+            if "s(1)" in self.description_dict.keys():
+                s = "s(1)"
+            elif "t(1,2)" in self.description_dict.keys():
+                s = "t(1,2)"
+            self.description_dict[s]["lam"]["smoothness"] = l
+            self.description_dict[s]["lam"]["constraint"] = 0
             self.fit(X=X, y=y, plot_=False)
             
             gcvs_smooth[str(l)] = self.calc_GCV_score(y=y)
             cvs_smooth[str(l)] = self.calc_CV_score(y=y)
 
         best_lam_smooth = float(min(gcvs_smooth, key=gcvs_smooth.get))
-        self.description_dict["s(1)"]["lam"]["smoothness"] = best_lam_smooth
-        self.description_dict["s(1)"]["lam"]["constraint"] = 1000*best_lam_smooth
+        self.description_dict[s]["lam"]["smoothness"] = best_lam_smooth
+        self.description_dict[s]["lam"]["constraint"] = 1000*best_lam_smooth
 
         self.fit(X=X, y=y, plot_=False)
         self.gcv_smoothness = gcvs_smooth
