@@ -42,25 +42,43 @@ class Smooths(Bspline):
         self.knot_type = type_
         self.bspline_basis(x_data=self.x_data, k=self.n_param, type_=type_)
         
-        # include the "grid weights" when we use quantile based knot placement 
-        smoothness = self.smoothness_matrix(n_param=self.n_param)
-        if type_ == "quantile":
-            eff_area = []
-            for i in range(n_param):
-                eff_area.append(self.knots[i+4] - self.knots[i])
-            eff_area = np.array(eff_area)
-        elif type_ == "equidistant":
-            eff_area = np.ones(n_param) * (self.knots[2]-self.knots[1])
-        # take inverse of the effective area
-        inv_norm_eff_area = (1 / eff_area) # / sum(1 / eff_area)
-        
-        if np.any(inv_norm_eff_area > 1e5):
-            print("Inverse of Effective Area is very large! => Downscaling")
-            inv_norm_eff_area /= 1e5
-        self.inv_eff_area = inv_norm_eff_area
-        smoothness = smoothness * inv_norm_eff_area
-        self.smoothness = smoothness.T @ smoothness
-        
+        ## include the "grid weights" when we use quantile based knot placement 
+        #smoothness = self.smoothness_matrix(n_param=self.n_param)
+        #if type_ == "quantile":
+        #    eff_area = []
+        #    for i in range(n_param):
+        #        eff_area.append(self.knots[i+4] - self.knots[i])
+        #    eff_area = np.array(eff_area)
+        #elif type_ == "equidistant":
+        #    eff_area = np.ones(n_param) * (self.knots[2]-self.knots[1])
+        ## take inverse of the effective area
+        #inv_norm_eff_area = (1 / eff_area) # / sum(1 / eff_area)
+        # 
+        #if np.any(inv_norm_eff_area > 1e5):
+        #    print("Inverse of Effective Area is very large! => Downscaling")
+        #    inv_norm_eff_area /= 1e5
+        #self.inv_eff_area = inv_norm_eff_area
+        #smoothness = smoothness * inv_norm_eff_area
+        #self.smoothness = smoothness.T @ smoothness
+
+        #print("Try the new difference star approach.")
+        # difference star according to Num Strömungsmechanik, Ferziger & Peric
+        msv = self.x_data[np.argmax(self.basis, axis=0)]
+        msv[0] = self.knots[2]
+        msv[-1] = self.knots[-3]
+        S = np.zeros((self.n_param-2,self.n_param))
+        for i in range(1, S.shape[0]):
+            
+            s_left = 1 / ((msv[i+1] - msv[i])*(msv[i]-msv[i-1]))
+            s_center = (msv[i+1]-msv[i-1])/((msv[i+1]-msv[i])**2 * (msv[i]-msv[i-1]))
+            s_right =  1 / (msv[i+1]-msv[i])**2
+            S[i, i] = s_left
+            S[i, i+1] = s_center
+            S[i, i+2] = s_right
+
+        S /= S.max()
+        self.smoothness = S.T @ S
+
         # Create the penalty matrix for the given penalty
         if constraint == "none":
             self.penalty_matrix = np.zeros((n_param, n_param))
