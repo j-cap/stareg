@@ -63,20 +63,24 @@ class Smooths(Bspline):
 
         #print("Try the new difference star approach.")
         # difference star according to Num Strömungsmechanik, Ferziger & Peric
-        msv = self.x_data[np.argmax(self.basis, axis=0)]
-        msv[0] = self.knots[2]
-        msv[-1] = self.knots[-3]
-        S = np.zeros((self.n_param-2,self.n_param))
-        for i in range(1, S.shape[0]):
-            
-            s_left = 1 / ((msv[i+1] - msv[i])*(msv[i]-msv[i-1]))
-            s_center = (msv[i+1]-msv[i-1])/((msv[i+1]-msv[i])**2 * (msv[i]-msv[i-1]))
-            s_right =  1 / (msv[i+1]-msv[i])**2
-            S[i, i] = s_left
-            S[i, i+1] = s_center
-            S[i, i+2] = s_right
+        if type_ == "quantile":
+            msv = self.x_data[np.argmax(self.basis, axis=0)]
+            msv[0] = self.knots[2]
+            msv[-1] = self.knots[-3]
+            S = np.zeros((self.n_param-2,self.n_param))
+            for i in range(1, S.shape[0]):
+                
+                s_left = 1 / ((msv[i+1] - msv[i])*(msv[i]-msv[i-1]))
+                s_center = (msv[i+1]-msv[i-1])/((msv[i+1]-msv[i])**2 * (msv[i]-msv[i-1]))
+                s_right =  1 / (msv[i+1]-msv[i])**2
+                S[i, i] = s_left
+                S[i, i+1] = s_center
+                S[i, i+2] = s_right
 
-        S /= S.max()
+            S /= S.max()
+        elif type_ == "equidistant":
+            S = self.smoothness_matrix(n_param=self.n_param)
+        self.S = S
         self.smoothness = S.T @ S
 
         # Create the penalty matrix for the given penalty
