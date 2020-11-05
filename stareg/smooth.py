@@ -76,19 +76,12 @@ class Smooths(Bspline):
                 S[i, i] = s_left
                 S[i, i+1] = s_center
                 S[i, i+2] = s_right
-<<<<<<< HEAD
-            S /= S.max()
-            self.smoothness = S.T @ S
-        elif type_ == "equidistant":
-            self.smoothness = self.smoothness_matrix(n_param=self.n_param)
-=======
 
             S /= S.max()
         elif type_ == "equidistant":
             S = self.smoothness_matrix(n_param=self.n_param)
         self.S = S
         self.smoothness = S.T @ S
->>>>>>> 7401bcd19718552e98115d3042cf7407acb221fe
 
         # Create the penalty matrix for the given penalty
         if constraint == "none":
