@@ -1,452 +1,205 @@
-#!/usr/bin/env python
 # coding: utf-8
 
-import copy
 import numpy as np
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
-from scipy.signal import find_peaks
+from scipy.sparse import diags
+from functools import singledispatch
 
-def check_constraint(beta, constraint, smooth_type=None):
-    """Checks if array beta fits the constraint.
-    
-    Parameters
+
+@singledispatch
+def mm(n_param : int, constraint="inc", dim=0):
+    """Creates the mapping matrix for the constraint P-splines as in
+    Fahrmeir, Regression p.436f, for the constraint.
+
+    Paramters:
     ----------
-    beta  : array
-        Array of coefficients to be tested against the constraint.
-    constraint : str
-        Name of the constraint.
-    smooth_type : str
-        Either stareg.smooths.Smooths or stareg.smooths.TensorProductSmooths
+    n_param : int     - Number of used B-spline basis functions.
+    constraint : str  - Type of constraint.
 
-    Returns
-    -------
-    V : np.ndarray
-        Matrix with 1 where the constraint is violated, 0 else.
+    Returns:
+    --------
+    D : matrix     - Finite difference matrix of shape (n_param-order x n_param)
+    """
+    order = 1 if constraint in ["inc", "dec", "peak", "valley"] else 2
+    assert (n_param > order), "n_param needs to be larger than order!"
+    if order == 1:
+        d1 = np.array([-1*np.ones(n_param),np.ones(n_param)])
+        D = diags(d1,offsets=[0,1], shape=(n_param-order, n_param)).toarray()
+    elif order == 2:
+        d2 = np.array([np.ones(n_param),-2*np.ones(n_param),np.ones(n_param)])
+        D = diags(d2,offsets=[0,1,2], shape=(n_param-order, n_param)).toarray()
+    else:
+        print(f"Finite difference matrix of order {order} is not implemented.")
+        return
+    return D
+
+@mm.register
+def _(n_param : tuple, constraint="inc", dim=0):
+    """Creates the mapping matrix for the constraint tensor-product P-splines 
+    as in Fahrmeir, Regression p.508 equation (8.27) for the constraint.
+
+    Paramters:
+    ----------
+    n_param : tuple     - Numbers of used B-spline basis functions.
+    constraint : str    - Type of constraint.
+    dim : int           - Indicator for the dimension of the constraint, 
+                          0 for dimension 1, 1 for dimension 2, e.g. 
+                          (10, "inc", 1) means 10 basis functions with increasing constraint
+                          in dimension 2 for the two-dimensional data X = [x_1, x_2]
+
+    Returns:
+    --------
+    D : matrix           - Mapping matrix for the constraint and dimension.
+    """
+    order1 = 1 if constraint in ["inc", "dec", "peak", "valley"] else 2
+
+    assert (dim in [0, 1]), "Argument 'dim' either 0 or 1."
+    assert (n_param[0] > order1 and n_param[1] > order1), "n_param needs to be larger than order of constraint!"
+
+    if order1 == 1:
+        d = np.array([-1*np.ones(n_param[dim]),np.ones(n_param[dim])])
+        D = diags(d,offsets=[0,1], shape=(n_param[dim]-order1, n_param[dim])).toarray()
+    elif order1 == 2:
+        d = np.array([np.ones(n_param[dim]),-2*np.ones(n_param[dim]),np.ones(n_param[dim])])
+        D = diags(d,offsets=[0,1,2], shape=(n_param[dim]-order1, n_param[dim])).toarray()
+    else:
+        print("Order too thigh for dimension 1!")
+        return
     
+    if dim == 0:
+        Dc = np.kron(np.eye(n_param[dim+1]), D)
+    else:
+        Dc = np.kron(D, np.eye(n_param[dim-1]))
+    if constraint is "none":
+        Dc = np.zeros((np.prod(n_param), np.prod(n_param)))
+    return Dc
+
+def check_constraint(coef, constraint="inc", y=None, B=None):
+    """Check whether the coefficients in coef hold true to the constraint for
+    the B-spline coefficients.
+
+    Parameters:
+    -----------
+    coef  : array     - Array of coefficients to test against the constraint.
+    constraint : str  - Constraint type.
+    y  : array        - Output data.
+    B  : matrix       - B-spline basis matrix.
+
+    Returns:
+    --------
+    v  : array      - Diagonal elements of the weighting matrix V.
     """
 
-    b_diff = np.diff(beta)
-    b_diff_diff = np.diff(b_diff)
-    if str(smooth_type) == "<class 'stareg.smooth.Smooths'>":
-        if constraint == "none":
-            v = np.zeros(len(beta))
-        elif constraint == "inc":
-            v = (np.diff(beta, 1) <= 0).astype(int)
-        elif constraint == "dec":
-            v = (np.diff(beta, 1) >= 0).astype(int)
-        elif constraint == "conv":
-            v = (np.diff(beta, 2) <= 0).astype(int)
-        elif constraint == "conc":
-            v = (np.diff(beta, 2) >= 0).astype(int)
-        elif constraint == "smooth":
-            v = np.zeros(len(b_diff_diff))
-        elif constraint == "peak":
-            v = check_constraint_peak(beta=beta)
-        elif constraint == "multi-peak":
-            v = check_multi_peak_constraint(beta=beta)
-        elif constraint == "valley":
-            v = check_valley_constraint(beta=beta)
-        elif constraint == "multi-valley":
-            v = check_multi_valley_constraint(beta=beta)
-        elif constraint == "peak-and-valley":
-            v = check_peak_and_valley_constraint(beta=beta)
+    threshold = 1e-4;
+    if constraint not in ["inc", "dec", "conv","conc", "peak", "valley", "none"]:
+        print(f"Constraint '{constraint}'' currently not available.")
+        return
 
-    elif str(smooth_type) == "<class 'stareg.smooth.TensorProductSmooths'>":
-        if constraint == "inc":
-            v = check_constraint_inc_tps(beta=beta, n_coef=(int(np.sqrt(len(beta))), int(np.sqrt(len(beta)))))
-        elif constraint == "inc_1":
-            v = check_constraint_inc_1_tps(beta=beta)
-        elif constraint == "inc_2":
-            v = check_constraint_inc_2_tps(beta=beta)
-        elif constraint == "dec":
-            v = check_constraint_dec_tps(beta=beta)
-        elif constraint == "smooth":
-            v = np.zeros(len(beta))
-        elif constraint == "peak":
-            v = check_constraint_peak_tps(beta=beta, n_coef=(int(np.sqrt(len(beta))), int(np.sqrt(len(beta)))))
-        elif constraint == "none":
-            v = np.zeros(len(beta))
+    if constraint == "inc":
+        v = np.diff(coef) < threshold
+    elif constraint == "dec":
+        v = np.diff(coef) > -threshold
+    elif constraint == "conv":
+        v = np.diff(coef, 2) < threshold
+    elif constraint == "conc":
+        v = np.diff(coef, 2) > -threshold
+    elif constraint == "peak":
+        assert (np.all(y != None) and np.all(B != None)), "Include the output y and B-spline basis matrix B."
+        peakidx = np.argmax(y)
+        peak_spline_idx = np.argmax(B[peakidx,:])
+        v = list(np.diff(coef[:peak_spline_idx]) < threshold) + [0] + list(np.diff(coef[peak_spline_idx:]) > -threshold)
+        v = np.array(v)
+    elif constraint == "valley":
+        assert (np.all(y != None) and np.all(B != None)), "Include the output y and B-spline basis matrix B."
+        valleyidx = np.argmin(y)
+        valley_spline_idx = np.argmin(B[peakidx,:])
+        v = list(np.diff(coef[:peak_spline_idx]) > -threshold) + [False] + list(np.diff(coef[peak_spline_idx:]) < threshold)
+        v = np.array(v)
+    else:
+        v = np.zeros(len(coef)-2)
+    return v.astype(int)
+
+def check_constraint_full(coef_, descr, basis=0, y=0):
+    """Checks the respective parts of the coef vector against 
+    the respective constraint constraints. 
+    
+    Paramters:
+    ----------
+    coef_ : array    - Vector of coefficients.
+    descr : tuple    - Model description.
+    
+    Returns:
+    --------
+    v : list    - Diagonal elements of the weighting matrix V.
+    
+    """
+    i, v, vc = 0, [], []
+    for e in descr:
+        type_, nr_splines, constraints = e[0], e[1], e[2]
+        if type_.startswith("s"):
+            c = coef_[i:int(nr_splines)+i]
+            vc += list(check_constraint(coef=c, constraint=constraints, y=y, B=basis[:, i:int(nr_splines)+i]))
+            v.append(check_constraint(coef=c, constraint=constraints, y=y, B=basis[:, i:int(nr_splines)+i]))
+        elif type_.startswith("t"):
+            c = coef_[i:np.prod(nr_splines)+i]
+            v1 = check_constraint_dim1(coef=c, nr_splines=nr_splines, constraint=constraints[0])
+            v2 = check_constraint_dim2(coef=c, nr_splines=nr_splines, constraint=constraints[1])
+            vc += list(v1) 
+            vc += list(v2)
+            v.append((v1,v2))
         else:
-            print(f"Constraint {constraint} not implemented for TPS")
+            print("Only B-splines (s) and tensor-product B-splines (t) are supported!")
             return
+        i += np.prod(e[1])
+    return v, vc
 
-    return np.diag(v)
-
-def check_constraint_inc_tps(beta, n_coef=None):
-    """Calculate the weight vector v for the increasing constraint for tps.
-
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for increasing constraint.
-    n_coef : tuple
-        Tuple of integers of the number of coefficients per region.
-
-    Returns
-    -------
-    v : array
-        Vector with 1 where constraint is violated, 0 elsewhere.
-
-    """
-
-    beta = beta.reshape(n_coef[0], n_coef[1])
-    V1 = np.zeros((n_coef[0], n_coef[1]))
-    V2 = np.zeros((n_coef[0], n_coef[1]))
-    V1[:,1:] = np.diff(beta)
-    V1[1:,0] = np.diff(beta[:,0])
-    V2[1:,:] = np.diff(beta, axis=0)
-    V2[0,1:] = np.diff(beta[0,:])
-    v = np.logical_or(V1 < 0, V2 < 0).flatten()
-    return v.astype(int)
-
-def check_constraint_inc_1_tps(beta):
-    """Calculate the weight vector v for first dimension increasing constraint using
-    column-wise first order differences.
-
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for 1D increasing constraint.
-
-    Returns
-    -------
-    v : array
-        Vector with 1 where constraint is violated, 0 elsewhere.
-
-    """
-    n_coef = int(np.sqrt(len(beta)))  # !!! only for same n_param per dimension
-    beta = beta.reshape(n_coef, n_coef)
-    V = np.zeros((n_coef, n_coef))
-    V[:-1,:] = np.diff(beta, axis=0)
-    v = (V < 0).flatten()
-    return v.astype(int)
-
-def check_constraint_inc_2_tps(beta):
-    """Calculate the weight vector v for second dimension increasing constraint using 
-    row-wise first order differences.
-
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for 1D increasing constraint.
-
-    Returns
-    -------
-    v : array
-        Vector with 1 where constraint is violated, 0 elsewhere.
-
-    """
-
-    n_coef = int(np.sqrt(len(beta)))  # !!! only for same n_param per dimension
-    beta = beta.reshape(n_coef, n_coef)
-    V = np.zeros((n_coef, n_coef))
-    V[:, :-1] = np.diff(beta)
-    v = (V < 0).flatten()
-    return v.astype(int)
-
-
-def check_constraint_dec_tps(beta, n_coef=None):
-    """Calculate the weight vector v for the decreasing constraint for tps.
-
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for decreasing constraint.
-    n_coef : tuple
-        Tuple of integers of the number of coefficients per region.
-
-    Returns
-    -------
-    v : array
-        Vector with 1 where constraint is violated, 0 elsewhere.
-
-    """
-
-    beta = beta.reshape(n_coef[0], n_coef[1])
-    V1 = np.zeros((n_coef[0], n_coef[1]))
-    V2 = np.zeros((n_coef[0], n_coef[1]))
-    V1[:,1:] = np.diff(beta)
-    V1[1:,0] = np.diff(beta[:,0])
-    V2[1:,:] = np.diff(beta, axis=0)
-    V2[0,1:] = np.diff(beta[0,:])
-    v = np.logical_or(V1 > 0, V2 > 0).flatten()
-    return v.astype(int)
-
-def check_constraint_peak_tps(beta, n_coef=None):
-    """Calculate the weight vector v for the peak constraint for tps.
-
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for decreasing constraint.
-
-    Returns
-    -------
-    v : array
-        Vector with 1 where constraint is violated, 0 elsewhere.
-
-    """
-
-    beta = beta.reshape(n_coef[0], n_coef[1])
-    # Find maximum coef_ without the boundary coefficients 
-    idx_max = np.where(beta[1:-1, 1:-1] == beta[1:-1,1:-1].max())
-    idx_max = idx_max[0][0]+1, idx_max[1][0]+1
-    
-    if idx_max[0] == 0 or (idx_max[1] in (n_coef[0]-1, n_coef[1]-1)):
-        print("Peak coefficients in the boundary region!")
-        cc = np.ones(len(beta.ravel()))
-        return cc
-    # upper left quadrant
-    beta_ulq = beta[:idx_max[0]+1, :idx_max[1]+1]
-    cc_ul = check_constraint_inc_tps(beta=beta_ulq, n_coef=beta_ulq.shape).reshape(beta_ulq.shape)
-
-    # upper right quadrant
-    beta_urq = beta[:idx_max[0]+1, idx_max[1]+1:]
-    beta_urq = beta_urq[:, ::-1]
-    cc_ur = check_constraint_inc_tps(beta=beta_urq, n_coef=beta_urq.shape).reshape(beta_urq.shape)[:, ::-1]
-
-    # lower left quadrant
-    beta_llq = beta[idx_max[0]+1:, :idx_max[1]+1]
-    beta_llq = beta_llq[:, ::-1]
-    cc_ll = check_constraint_dec_tps(beta=beta_llq, n_coef=beta_llq.shape).reshape(beta_llq.shape)[:,::-1]
-
-    # lower right quadrant
-    beta_lrq = beta[idx_max[0]+1:, idx_max[1]+1:]
-    cc_lr = check_constraint_dec_tps(beta=beta_lrq, n_coef=beta_lrq.shape).reshape(beta_lrq.shape)
-
-    cc = np.vstack((np.hstack((cc_ul, cc_ur)), np.hstack((cc_ll, cc_lr))))
-    return cc.ravel()
-
-
-def check_valley_constraint(beta):
-    """Calculate the weight vector v for valley constraint.
-
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for valley constraint.
-
-    Returns
-    -------
-    v : array
-        Vector with 1 where constraint is violated, 0 elsewhere.
-
-    """
-
-    idx = find_peaks(-beta, distance=len(beta))[0][0]
-    left = np.diff(beta[:idx+1]) > 0
-    right = np.diff(beta[idx:]) < 0
-    v = np.array(list(left)+list(right))
-    return v.astype(np.int)
-
-def check_multi_valley_constraint(beta):
-    """Check whether beta contains 2 peaks and is increasing to the first,
-    then decreasing, then again increasing and then again decreasing
-
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for multi_valley constraint
-
-    Returns
-    -------
-    v : array
-        Vaector with 1 where constraint is violated, 0 elsewhere
-    """
-
-    valleys, _ = find_peaks(x=-1*beta, prominence=np.std(beta), distance=int(len(beta)/3))
-    middle_spline = int(np.mean(valleys))
-    v1 = check_valley_constraint(beta=beta[:middle_spline+1])
-    v2 = check_valley_constraint(beta=beta[middle_spline:])
-    v = np.array(list(v1)+list(v2))
-    return v.astype(np.int)
-
-def check_constraint_peak(beta, peak_idx=None):
-    """Calculate the weight vector v for peak constraint.
-
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for peak constraint.
-    peak_idx : int
-        Index of the peak in the data.
-
-    Returns
-    -------
-    v : array
-        Vector with 1 where constraint is violated, 0 elsewhere.
-
-    """
-
-    idx = find_peaks(beta, distance=len(beta))[0][0]
-    left = np.diff(beta[:idx+1]) < 0
-    right = np.diff(beta[idx:]) > 0
-    v = np.array(list(left)+list(right))
-    return v.astype(np.int)
-
-def check_multi_peak_constraint(beta):
-    """Check whether beta contains 2 peaks and is increasing to the first,
-    then decreasing, then again increasing and then again decreasing
-
-
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for multi_peak constraint.
-
-    Returns
-    -------
-    v : array
-        Vector with 1 where constraint is violated, 0 elsewhere.
-
-    """
-
-    peaks, _ = find_peaks(x=beta, prominence=np.std(beta), distance=int(len(beta)/3))
-    middle_spline = int(np.mean(peaks))
-    v1 = check_constraint_peak(beta=beta[:middle_spline+1])
-    v2 = check_constraint_peak(beta=beta[middle_spline:])
-    v = np.array(list(v1)+list(v2))
-    return v.astype(np.int)
-
-def check_peak_and_valley_constraint(beta):
-    """ Check whether beta contains a peak and a valley.
+def check_constraint_dim2(coef, constraint="inc", nr_splines=(6,4)):
+    """Compute the diagonal elements of the weighting matrix for SC-TP-P-splines 
+    given the constraint for direction 2.
     
     
-    Parameters
-    ----------
-    beta : array
-        Array of coefficients to test for peak_and_valley constraint.
-
-    Returns
-    -------
-    v : array
-        Vector with 1 where constraint is violated, 0 elsewhere.
-
+    According to the scheme given in the Master Thesis !!
     """
-
-    peak, _ = find_peaks(x=beta, distance=len(beta))
-    valley, _ = find_peaks(x=-beta, distance=len(beta))
-    middle_spline = int(np.mean([peak, valley]))
-
-    if peak > valley:
-        v1 = check_valley_constraint(beta=beta[:middle_spline+1])
-        v2 = check_constraint_peak(beta=beta[middle_spline:])
-    elif peak < valley:
-        v1 = check_constraint_peak(beta=beta[:middle_spline+1])
-        v2 = check_valley_constraint(beta=beta[middle_spline:])
-    v = np.array(list(v1)+list(v2))
-    return v.astype(np.int)
-
-
-def check_constraint_full_model(model):
-    """Checks if the coefficients in the model violate the given constraints for the whole model.
-    
-    Parameters
-    ----------
-    model : StarModel
-        Instance of StarModel to test the coefficients against the constraints.
-
-    Returns
-    -------
-    v : array
-        Array of boolean whether the constraint is violated. 1 if violated, 0 else.
-    """
-
-    assert (model.coef_ is not None), "Please run Model.fit(X, y) first!"
-    v = []
-    for val in model.smooths.values():
-        V = check_constraint(val.coef_, val.constraint, smooth_type=type(val))
-        v += list(np.diag(V).astype(int))
-    
-    return np.array(v, dtype=np.int)    
-    
-def bar_chart_of_coefficient_difference_dataframe(df):
-    """Takes the dataframe Model.df and plots a bar chart of the rows. 
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame of the cofficients values during the iteration of StarModel.fit().
+    if constraint in ["inc", "dec"]:
+        diff = 1
+    else:
+        diff = 0
         
-    """
-
-    fig = go.Figure()
-    xx = df.columns[1:]
-    for i in range(df.shape[0]):
-        fig.add_trace(go.Bar(x=xx, y=np.diff(df.iloc[i]), name=f"Iteration {i}"))
-    fig.update_xaxes(
-        showgrid=True,
-        ticks="outside",
-        tickson="boundaries",
-        ticklen=20
-    )
-    fig.update_layout(title="Difference in coefficients", )
-    fig.show()        
-        
-def line_chart_of_coefficient_dataframe(df):
-    """Takes the dataframe Model.df and plots a line chart of the rows. 
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame of the cofficients values during the iteration of StarModel.fit().
-        
-    """
-
-    fig = go.Figure()
-    x = np.arange(df.shape[1])
-    for i in range(df.shape[0]):
-        fig.add_trace(go.Scatter(x=x, y=df.iloc[i], name=f"Iteration {i}",
-                                mode="lines"))
-    fig.update_layout(title="Coefficients at different iterations",)
-    fig.show()
-
-def add_vert_line(fig, x0=0, y0=0, y1=1):
-    """Plots a vertical line to the given figure at position x.
+    v2 = np.zeros(nr_splines[0]*(nr_splines[1]-diff))
+    for i in range(1, nr_splines[1]):
+        for j in range(1, nr_splines[0]+1):
+            # print(j+(i-1)*nr_splines[0]-1, "->", j+i*nr_splines[0]-1, "-", j+i*nr_splines[0]-nr_splines[0]-1)
+            v2[j+(i-1)*nr_splines[0]-1] = coef[j+i*nr_splines[0]-1] - coef[j+i*nr_splines[0]-nr_splines[0]-1]
+    if constraint == "inc":
+        v2 = v2 < 0
+    elif constraint == "dec":
+        v2 = v2 > 0
+    elif constraint == "none":
+        v2 = np.zeros(v2.shape)
     
-    Parameters
-    ----------
-    fig : Plotly.graph_objs
-        Figure to plot the vertical line in. 
-    x0 : float
-        Position of the vertical line.
-    y0 : float
-        Lowest point of the vertical line.
-    y1 : float
-        Highest point of the vertical line.
+    return v2.astype(int)
+
+def check_constraint_dim1(coef, constraint="inc", nr_splines=(6,4)):
+    """Compute the diagonal elements of the weighting matrix for SC-TP-P-splines 
+    given the constraint for direction 1.
     
+    According to the scheme given in the Master Thesis !!
     """
-    fig.add_shape(dict(type="line", x0=x0, x1=x0, y0=y0, y1=1.2*y1, 
-                       line=dict(color="LightSeaGreen", width=1)))
-
-
-def test_model_against_constraints(model):
-    """Test all submodels against the constraints for the submodel. 
-
-    Parameter
-    ---------
-    model : StarModel
-
-    Returns
-    -------
-    ICP : float
-        Invalid constraint percentage value.
-
-    """
-
-    alltests = []
-    for v in model.smooths.values():
-        if str(type(v)) == "<class 'stareg.smooth.TensorProductSmooths'>":
-            xtest = np.linspace(0,1,100)
-            x1g, x2g = np.meshgrid(xtest, xtest)
-            Xtest = np.vstack((x1g.ravel(), x2g.ravel())).T
-        elif str(type(v)) == "<class 'stareg.smooth.Smooths'>":
-            Xtest = np.linspace(0,1,1000).reshape(-1,1)    
-        ypred = [v.spp(sp=sp, coef_=v.coef_) for sp in Xtest]
-        t = np.diag(check_constraint(beta=np.array(ypred), constraint=v.constraint, smooth_type=type(v)))
-        alltests.append(t.astype(int))
-    ICP_list = list(map(lambda x: sum(x) / len(x), alltests))
-    ICP = sum(ICP_list)
-    return ICP, ICP_list
-
+    if constraint in ["inc", "dec"]:
+        diff = 1
+    else:
+        diff = 0
+    # first constraint in dim 1
+    v1 = np.zeros((nr_splines[0]-diff)*nr_splines[1])
+    for i in range(1,nr_splines[1]+1): 
+        for j in range(nr_splines[0]-1):
+            # print(j+(i-1)*(nr_splines[0]-1), "->", j+(i-1)*nr_splines[0] + 1, "-", j+(i-1)*nr_splines[0])
+            v1[j+(i-1)*(nr_splines[0]-1)] = coef[j+(i-1)*nr_splines[0] + 1] - coef[j+(i-1)*nr_splines[0]]
+            
+    if constraint == "inc":
+        v1 = v1 < 0
+    elif constraint == "dec":
+        v1 = v1 > 0
+    elif constraint == "none":
+        v1 = np.zeros(v1.shape)
+    
+    return v1.astype(int)

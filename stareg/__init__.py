@@ -1,9 +1,5 @@
-
 from .bspline import Bspline
-from .penalty_matrix import PenaltyMatrix
-from .smooth import Smooths
-from .star_model import StarModel
-from .tensorproductspline import TensorProductSpline
 from .utils import *
+from .star_model import *
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"

@@ -15,10 +15,7 @@ setup(
     description="Implementation of Structured Additive Regression",  # one liner
     py_modules=[
         "bspline",
-        "penalty_matrix",
-        "smooth",
         "star_model",
-        "tensorproductspline",
         "utils" 
         ], # list of actual python code modules -> this is what is imported
     packages=find_packages(exclude=("tests",)),
