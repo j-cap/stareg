@@ -69,7 +69,7 @@ def _(n_param : tuple, constraint="inc", dim=0):
         Dc = np.kron(np.eye(n_param[dim+1]), D)
     else:
         Dc = np.kron(D, np.eye(n_param[dim-1]))
-    if constraint is "none":
+    if constraint == "none":
         Dc = np.zeros((np.prod(n_param), np.prod(n_param)))
     return Dc
 
@@ -89,7 +89,7 @@ def check_constraint(coef, constraint="inc", y=None, B=None):
     v  : array      - Diagonal elements of the weighting matrix V.
     """
 
-    threshold = 1e-4;
+    threshold = 1e-4
     if constraint not in ["inc", "dec", "conv","conc", "peak", "valley", "none"]:
         print(f"Constraint '{constraint}'' currently not available.")
         return

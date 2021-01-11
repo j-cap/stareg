@@ -8,11 +8,11 @@ with open("README.md", "r") as fh:
 
 setup(
     name="stareg", # the name of your package as it will appear on PyPI
-    version="1.1.0",    # 0.0.x imply that it is unstable
+    version="1.2.0",    # 0.0.x imply that it is unstable
     url="https://github.com/j-cap/stareg",
     author="Jakob Weber",
     author_email="jakobweber@hotmail.com",
-    description="Implementation of Structured Additive Regression",  # one liner
+    description="Structured Additive Regression using B-splines",  # one liner
     py_modules=[
         "bspline",
         "star_model",
@@ -21,7 +21,6 @@ setup(
     packages=find_packages(exclude=("tests",)),
     license="MIT",
     classifiers=[ # to search for it on PyPI
-        "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "License :: OSI Approved :: MIT License",
@@ -31,10 +30,10 @@ setup(
     long_description_content_type="text/markdown",
     install_requires = [ # describe the used libraries and versions, e.g. pandas, numpy == production 
                          # dependencies -> versions should be as relaxed as possible
-        "numpy",
-        "pandas",
-        "sklearn",
-        "plotly"
+        "numpy=1.19",
+        "sklearn=0.32",
+        "plotly=4.9",
+        "pandas=1.1"
     ],
     extras_require = {  # for optional dependencies, e.g testing 
                         #  -> versions should be as specific as possible 

@@ -1,8 +1,12 @@
 # coding: utf-8
 
 import numpy as np
-from bspline import Bspline
-from utils import *
+import pandas as pd
+from scipy.linalg import block_diag
+from sklearn.metrics import mean_squared_error
+
+from .bspline import Bspline
+from .utils import *
 
 def star_model(descr, X, y):
     """Fit a structured additive regression model using B-splines to the data in (X,y). 
@@ -138,7 +142,7 @@ def star_model_predict(Xpred, coefs, descr):
     for e in descr:
         type_, nr_splines, constraints, lam_c, knot_types = e[0], e[1], e[2], e[3], e[4]
         print("Process ", type_)
-        time.sleep(0.2)
+        #time.sleep(0.2)
         if type_.startswith("s"):
             dim = int(type_[2])
             B = BS.basismatrix(X=Xpred[:,dim-1], nr_splines=nr_splines, l=3, knot_type=knot_types)["basis"]

@@ -1,10 +1,12 @@
 # coding: utf-8
 
 import numpy as np
-from tqdm import tqdm
 import plotly.graph_objects as go
+import pandas as pd
+
+from tqdm import tqdm
 from sklearn.metrics import mean_squared_error
-from utils import *
+from .utils import *
 from functools import singledispatch
 
 class Bspline():
@@ -35,7 +37,7 @@ class Bspline():
             return b
 
     @classmethod
-    def basismatrix(self, X, nr_splines=10, l=3, knot_type="e"):
+    def basismatrix(cls, X, nr_splines=10, l=3, knot_type="e"):
         """Generate the B-spline basis matrix for nr_splines given the data X.
 
          Note: (nr_splines + l + 1) knots are needed for a B-spline basis of 
@@ -55,14 +57,14 @@ class Bspline():
          k : array   - Knot sequence.
 
         """
-        Bs = Bspline()
+        print("Inside Bspline.basismatrix()")
         B = np.zeros((len(X), nr_splines))
         xmin, xmax = X.min(), X.max()
 
-        if knot_type is "e":
+        if knot_type == "e":
             knots_inner = np.linspace(xmin, xmax, nr_splines-l+1)
-        elif knot_type is "q":
-            p = np.linspace(0, 1, nr_splines-l+1);
+        elif knot_type == "q":
+            p = np.linspace(0, 1, nr_splines-l+1)
             xs = np.sort(X, kind="quicksort")
             quantile_idx = np.array((len(X)-1)*p, dtype=np.int16)
             knots_inner = xs[quantile_idx]
@@ -74,13 +76,14 @@ class Bspline():
         knots_right = np.linspace(xmax+dknots, xmax+l*dknots, l)
         knots = np.concatenate((knots_left, knots_inner, knots_right))
 
+        BS = Bspline()
         for j in range(l,len(knots)-1):
-            B[:,j-l] = Bs.basisfunction(X=X, knots=knots, j=j, l=l);
+            B[:,j-l] = BS.basisfunction(X=X, knots=knots, j=j, l=l);
 
         return dict(basis=B, knots=knots)
 
     @classmethod
-    def tensorproduct_basismatrix(self, X, nr_splines=(7,7), l=(3,3), knot_type=("e", "e")):
+    def tensorproduct_basismatrix(cls, X, nr_splines=(7,7), l=(3,3), knot_type=("e", "e")):
         """Generate the 2-d tensor-product B-spline basis matrix for nr_splines[0] and
         nr_splines[1] for dimension 1 and 2.
 
@@ -97,9 +100,9 @@ class Bspline():
         k1 : array    - Knot sequence of dimension 1.
         k2 : array    - Knot sequence of dimension 2.
         """
-        BS = Bspline()
-        B1, k1 = BS.basismatrix(X=X[:,0], nr_splines=nr_splines[0], l=l[0], knot_type=knot_type[0]).values()
-        B2, k2 = BS.basismatrix(X=X[:,1], nr_splines=nr_splines[1], l=l[1], knot_type=knot_type[1]).values()
+
+        B1, k1 = cls.basismatrix(X=X[:,0], nr_splines=nr_splines[0], l=l[0], knot_type=knot_type[0]).values()
+        B2, k2 = cls.basismatrix(X=X[:,1], nr_splines=nr_splines[1], l=l[1], knot_type=knot_type[1]).values()
 
         n_samples, n_dim = X.shape
         T = np.zeros((n_samples, nr_splines[0]*nr_splines[1]))
@@ -109,7 +112,7 @@ class Bspline():
         return dict(basis=T, knots1=k1, knots2=k2)
     
     @classmethod
-    def fit(self, X, y, nr_splines=10, l=3, knot_type="e"):
+    def fit(cls, X, y, nr_splines=10, l=3, knot_type="e"):
         """Calculate the least squares parameters of the B-spline given the data X.
 
         Parameters:
@@ -127,9 +130,9 @@ class Bspline():
         k : array      - Knot sequence 
         """
         if len(X.shape) == 1:
-            B, k = self.basismatrix(X=X, nr_splines=nr_splines, l=l, knot_type=knot_type).values()
+            B, k = cls.basismatrix(X=X, nr_splines=nr_splines, l=l, knot_type=knot_type).values()
         elif X.shape[1] == 2:
-            B, k1, k2 = self.tensorproduct_basismatrix(X=X, nr_splines=nr_splines, l=l, knot_type=knot_type).values()
+            B, k1, k2 = cls.tensorproduct_basismatrix(X=X, nr_splines=nr_splines, l=l, knot_type=knot_type).values()
             k = (k1, k2)
         else:
             print("Maximal dimension == 2!")
