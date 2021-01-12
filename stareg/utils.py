@@ -27,9 +27,10 @@ def mm(n_param : int, constraint="inc", dim=0):
     elif order == 2:
         d2 = np.array([np.ones(n_param),-2*np.ones(n_param),np.ones(n_param)])
         D = diags(d2,offsets=[0,1,2], shape=(n_param-order, n_param)).toarray()
-    else:
-        print(f"Finite difference matrix of order {order} is not implemented.")
-        return
+
+    if constraint == "none":
+        D = np.zeros((n_param, n_param))
+
     return D
 
 @mm.register
@@ -50,27 +51,26 @@ def _(n_param : tuple, constraint="inc", dim=0):
     --------
     D : matrix           - Mapping matrix for the constraint and dimension.
     """
-    order1 = 1 if constraint in ["inc", "dec", "peak", "valley"] else 2
+    order = 1 if constraint in ["inc", "dec", "peak", "valley"] else 2
 
     assert (dim in [0, 1]), "Argument 'dim' either 0 or 1."
-    assert (n_param[0] > order1 and n_param[1] > order1), "n_param needs to be larger than order of constraint!"
+    assert (n_param[0] > order and n_param[1] > order), "n_param needs to be larger than order of constraint!"
 
-    if order1 == 1:
+    if order == 1:
         d = np.array([-1*np.ones(n_param[dim]),np.ones(n_param[dim])])
-        D = diags(d,offsets=[0,1], shape=(n_param[dim]-order1, n_param[dim])).toarray()
-    elif order1 == 2:
+        D = diags(d,offsets=[0,1], shape=(n_param[dim]-order, n_param[dim])).toarray()
+    elif order == 2:
         d = np.array([np.ones(n_param[dim]),-2*np.ones(n_param[dim]),np.ones(n_param[dim])])
-        D = diags(d,offsets=[0,1,2], shape=(n_param[dim]-order1, n_param[dim])).toarray()
-    else:
-        print("Order too thigh for dimension 1!")
-        return
+        D = diags(d,offsets=[0,1,2], shape=(n_param[dim]-order, n_param[dim])).toarray()
     
     if dim == 0:
         Dc = np.kron(np.eye(n_param[dim+1]), D)
     else:
         Dc = np.kron(D, np.eye(n_param[dim-1]))
+
     if constraint == "none":
         Dc = np.zeros((np.prod(n_param), np.prod(n_param)))
+
     return Dc
 
 def check_constraint(coef, constraint="inc", y=None, B=None):
@@ -81,7 +81,7 @@ def check_constraint(coef, constraint="inc", y=None, B=None):
     -----------
     coef  : array     - Array of coefficients to test against the constraint.
     constraint : str  - Constraint type.
-    y  : array        - Output data.
+    y  : array        - Target data.
     B  : matrix       - B-spline basis matrix.
 
     Returns:
@@ -111,8 +111,8 @@ def check_constraint(coef, constraint="inc", y=None, B=None):
     elif constraint == "valley":
         assert (np.all(y != None) and np.all(B != None)), "Include the output y and B-spline basis matrix B."
         valleyidx = np.argmin(y)
-        valley_spline_idx = np.argmin(B[peakidx,:])
-        v = list(np.diff(coef[:peak_spline_idx]) > -threshold) + [False] + list(np.diff(coef[peak_spline_idx:]) < threshold)
+        valley_spline_idx = np.argmin(B[valleyidx,:])
+        v = list(np.diff(coef[:valley_spline_idx]) > -threshold) + [0] + list(np.diff(coef[valley_spline_idx:]) < threshold)
         v = np.array(v)
     else:
         v = np.zeros(len(coef)-2)
@@ -154,10 +154,20 @@ def check_constraint_full(coef_, descr, basis=0, y=0):
 
 def check_constraint_dim2(coef, constraint="inc", nr_splines=(6,4)):
     """Compute the diagonal elements of the weighting matrix for SC-TP-P-splines 
+    Compute the diagonal elements of the weighting matrix for SC-TP-P-splines 
     given the constraint for direction 2.
-    
-    
+      
     According to the scheme given in the Master Thesis !!
+    
+    Parameters:
+    -----------
+    coef  : array      - Coefficient vector to test against constraint.
+    constraint : str   - Specifies the constraint.
+    nr_splines : list  - Specifies the number of splines in each dimension
+    
+    Returns
+    -------
+    v  : array         - Diagonal elements of the weighting matrix V.
     """
     if constraint in ["inc", "dec"]:
         diff = 1
@@ -180,9 +190,20 @@ def check_constraint_dim2(coef, constraint="inc", nr_splines=(6,4)):
 
 def check_constraint_dim1(coef, constraint="inc", nr_splines=(6,4)):
     """Compute the diagonal elements of the weighting matrix for SC-TP-P-splines 
+    Compute the diagonal elements of the weighting matrix for SC-TP-P-splines 
     given the constraint for direction 1.
-    
+      
     According to the scheme given in the Master Thesis !!
+    
+    Parameters:
+    -----------
+    coef  : array      - Coefficient vector to test against constraint.
+    constraint : str   - Specifies the constraint.
+    nr_splines : list  - Specifies the number of splines in each dimension
+    
+    Returns
+    -------
+    v  : array         - Diagonal elements of the weighting matrix V.
     """
     if constraint in ["inc", "dec"]:
         diff = 1

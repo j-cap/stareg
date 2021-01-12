@@ -57,7 +57,7 @@ class Bspline():
          k : array   - Knot sequence.
 
         """
-        print("Inside Bspline.basismatrix()")
+
         B = np.zeros((len(X), nr_splines))
         xmin, xmax = X.min(), X.max()
 
@@ -141,7 +141,7 @@ class Bspline():
         return dict(coef_=solution[0], basis=B, knots=k) 
     
     def predict(self, Xpred, coef, knots, l=3):
-        """Calculate the B-spline value for X given the parameters in coef.
+        """Evaluate the B-spline or tensorproduct B-spline given the knot sequence with the coefficients for data X.
 
         Paramters:
         ----------
@@ -164,15 +164,15 @@ class Bspline():
         elif Xpred.shape[1] == 2:
             print("Prediction for 2-D Data".center(30, "-"))
             n_samples = len(Xpred[:,0])
-            B1pred, B2pred = np.zeros((n_samples, len(knots[0])-1-l[0])), np.zeros((n_samples, len(knots[1])-1-l[1]))
+            B1, B2 = np.zeros((n_samples, len(knots[0])-1-l[0])), np.zeros((n_samples, len(knots[1])-1-l[1]))
             B = np.zeros((n_samples, len(coef)))
 
             for j in range(l[0], len(knots[0])-1):
-                B1pred[:,j-l[0]] = self.basisfunction(Xpred[:,0], knots[0], j, l[0]) 
+                B1[:,j-l[0]] = self.basisfunction(Xpred[:,0], knots[0], j, l[0]) 
             for j in range(l[1], len(knots[1])-1):
-                B2pred[:,j-l[1]] = self.basisfunction(Xpred[:,1], knots[1], j, l[1]) 
+                B2[:,j-l[1]] = self.basisfunction(Xpred[:,1], knots[1], j, l[1]) 
             for i in range(n_samples):
-                B[i,:] = np.kron(B2pred[i,:], B1pred[i,:])    
+                B[i,:] = np.kron(B2[i,:], B1[i,:])    
         else:
             print("Maximal dimension == 2!")
             return 
@@ -180,7 +180,7 @@ class Bspline():
         return s    
 
     @classmethod
-    def fit_Pspline(self, X, y, nr_splines=10, l=3, knot_type="e", lam=1):
+    def fit_Pspline(cls, X, y, nr_splines=10, l=3, knot_type="e", lam=1):
         """Implementation of the P-spline functionality given in Fahrmeir, Regression p.431ff.
 
         Solves the Ridge regression style problem of the form:
@@ -206,12 +206,12 @@ class Bspline():
         k : array      - Knot sequence 
         """
         if len(X.shape) == 1:
-            B, k = self.basismatrix(X=X, nr_splines=nr_splines, l=l, knot_type=knot_type).values()
+            B, k = cls.basismatrix(X=X, nr_splines=nr_splines, l=l, knot_type=knot_type).values()
             D2 = mm(nr_splines, constraint="smooth")
             coef_ = np.linalg.pinv(B.T@B + lam * (D2.T@D2)) @ (B.T @ y)
             D = D2
         elif X.shape[1] == 2:
-            T, k1, k2 = self.tensorproduct_basismatrix(X=X, nr_splines=nr_splines, l=l, knot_type=knot_type).values()
+            T, k1, k2 = cls.tensorproduct_basismatrix(X=X, nr_splines=nr_splines, l=l, knot_type=knot_type).values()
             k = (k1, k2)
             D1 = mm(nr_splines, constraint="smooth", dim=0)
             D2 = mm(nr_splines, constraint="smooth", dim=1)
@@ -221,7 +221,6 @@ class Bspline():
             print("Maximal dimension == 2!")
             return 
 
-        self.Pspline_coef_ = coef_
         return dict(coef_=coef_, basis=B, knots=k, mapping_matrices=D)
 
     def calc_GCV(self, X, y, nr_splines=10, l=3, knot_type="e", nr_lam=10, plot_=1):
