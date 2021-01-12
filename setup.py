@@ -30,10 +30,10 @@ setup(
     long_description_content_type="text/markdown",
     install_requires = [ # describe the used libraries and versions, e.g. pandas, numpy == production 
                          # dependencies -> versions should be as relaxed as possible
-        "numpy=1.19",
-        "sklearn=0.32",
-        "plotly=4.9",
-        "pandas=1.1"
+        "numpy>=1.19",
+        "scikit-learn>=0.23",
+        "plotly>=4.9",
+        "pandas>=1.1"
     ],
     extras_require = {  # for optional dependencies, e.g testing 
                         #  -> versions should be as specific as possible 
