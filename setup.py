@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# https://python-packaging-tutorial.readthedocs.io/en/latest/setup_py.html
+
 from setuptools import setup, find_packages
 
 with open("README.md", "r") as fh:
@@ -33,7 +35,8 @@ setup(
         "numpy>=1.19",
         "scikit-learn>=0.23",
         "plotly>=4.9",
-        "pandas>=1.1"
+        "pandas>=1.1",
+        "PySimpleGui>=4.33"
     ],
     extras_require = {  # for optional dependencies, e.g testing 
                         #  -> versions should be as specific as possible 
