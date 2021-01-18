@@ -36,7 +36,9 @@ setup(
         "scikit-learn>=0.23",
         "plotly>=4.9",
         "pandas>=1.1",
-        "PySimpleGui>=4.33"
+        "PySimpleGui>=4.33",
+        "matplotlib>=3.3",
+        "tqdm>=4.48"
     ],
     extras_require = {  # for optional dependencies, e.g testing 
                         #  -> versions should be as specific as possible 
