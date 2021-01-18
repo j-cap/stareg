@@ -90,7 +90,6 @@ def star_model(descr, X, y):
             S.append(optimal_lambdas[i]*(s.T@s))
     S = block_diag(*S)
     # create combined constraint matrix
-
     for i, c in enumerate(constr):
         if len(c) == 2:
             K.append(6000*(c[0].T @ np.diag(weights[i][0]) @ c[0]) + 6000*(c[1].T @np.diag(weights[i][1]) @ c[1]))

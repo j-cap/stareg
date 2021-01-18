@@ -111,11 +111,11 @@ def check_constraint(coef, constraint="inc", y=None, B=None):
     elif constraint == "valley":
         assert (np.all(y != None) and np.all(B != None)), "Include the output y and B-spline basis matrix B."
         valleyidx = np.argmin(y)
-        valley_spline_idx = np.argmin(B[valleyidx,:])
+        valley_spline_idx = np.argmax(B[valleyidx,:])
         v = list(np.diff(coef[:valley_spline_idx]) > -threshold) + [0] + list(np.diff(coef[valley_spline_idx:]) < threshold)
         v = np.array(v)
     else:
-        v = np.zeros(len(coef)-2)
+        v = np.zeros(len(coef))
     return v.astype(int)
 
 def check_constraint_full(coef_, descr, basis=0, y=0):
