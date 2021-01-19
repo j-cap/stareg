@@ -108,7 +108,6 @@ def star_model(descr, X, y):
         weights_old = weights_compare
         coef_pls = np.linalg.pinv(BtB + S + K) @ (Bty)
         weights, weights_compare = check_constraint_full(coef_=coef_pls, descr=descr, basis=B, y=y)
-        # weights = check_constraint_full(coef_=coef_pls, descr=m, basis=B, y=y)
 
         print(f" Iteration {iterIdx} ".center(50, "="))
         print(f"MSE = {mean_squared_error(y, B@coef_pls).round(7)}".center(50, "-"))

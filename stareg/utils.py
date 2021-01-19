@@ -120,7 +120,7 @@ def check_constraint(coef, constraint="inc", y=None, B=None):
 
 def check_constraint_full(coef_, descr, basis=0, y=0):
     """Checks the respective parts of the coef vector against 
-    the respective constraint constraints. 
+    the respective constraints. 
     
     Paramters:
     ----------
@@ -130,7 +130,7 @@ def check_constraint_full(coef_, descr, basis=0, y=0):
     Returns:
     --------
     v : list    - Diagonal elements of the weighting matrix V.
-    
+    vc : list   - Comparable version of the weighting matrix V.
     """
     i, v, vc = 0, [], []
     for e in descr:
