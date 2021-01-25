@@ -152,6 +152,8 @@ def check_constraint_full(coef_, descr, basis=0, y=0):
         i += np.prod(e[1])
     return v, vc
 
+
+
 def check_constraint_dim2(coef, constraint="inc", nr_splines=(6,4)):
     """Compute the diagonal elements of the weighting matrix for SC-TP-P-splines 
     Compute the diagonal elements of the weighting matrix for SC-TP-P-splines 
