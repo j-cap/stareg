@@ -118,6 +118,48 @@ def check_constraint(coef, constraint="inc", y=None, B=None):
         v = np.zeros(len(coef))
     return v.astype(int)
 
+def check_constraint_full_model(model, coef=None, basis=0, y=0):
+    """ Tests the whole model against all constraints given in the model.
+    
+    Parameters:
+    ----------
+    model : dict    - Model dictionary, output from stareg.create_model_from_description.
+    coef : array    - If None, uses coef_pls as test coefficients.
+    basis : matrix  - Basis matrix to evaluate peak/valley constraint.
+    y : arra        - Target data to evaluate peak/valley constraint
+    Returns:
+    --------
+    W : dict        - Keys are the submodels, values are the weight vectors of the submodel.
+    model : dict    - Updated model, the weights are changed to be consisted with W.
+    
+    """
+    W = dict()
+    coef_idx = 0
+    for submodel in model.keys():
+        type_ = model[submodel]["type"]
+        len_submodel = len(model[submodel]["coef_pls"])
+        if coef is not None:
+            test_coef = coef[coef_idx:len_submodel+coef_idx]
+            #ic(test_coef.shape)
+        else:
+            test_coef = model[submodel]["coef_pls"]
+        test_constraints = model[submodel]["constraint"]
+        #ic(test_constraints)
+        if type_.startswith("s"):
+            v = list(check_constraint(test_coef, constraint=test_constraints, y=y, B=model[submodel]["B"]))
+            
+        elif type_.startswith("t"):
+            v1 = list(check_constraint_dim1(test_coef, test_constraints[0], nr_splines=model[submodel]["nr_splines"]))
+            v2 = list(check_constraint_dim2(test_coef, test_constraints[1], nr_splines=model[submodel]["nr_splines"]))
+            v = dict(v1=v1, v2=v2)
+        
+        model[submodel]["weights"] = v
+        W[submodel] = v
+        coef_idx += len_submodel
+        #ic(coef_idx)
+    return W, model
+
+
 def check_constraint_full(coef_, descr, basis=0, y=0):
     """Checks the respective parts of the coef vector against 
     the respective constraints. 
