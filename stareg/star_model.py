@@ -64,7 +64,6 @@ class Stareg():
         Returns:
         --------
         ypred : array     - Predicted values.
-        basis : matrix    - B-spline basis matrix for the model.
         """
         
         basis = []
@@ -72,26 +71,36 @@ class Stareg():
             type_ = model[submodel]["type"]
             nr_splines = model[submodel]["nr_splines"]
             knot_types = model[submodel]["knot_type"]
+            knots = model[submodel]["knots"]
             order = model[submodel]["order"]
             print("Process ", type_)
             #time.sleep(0.2)
             if type_.startswith("s"):
                 dim = int(type_[2])-1
                 data = Xpred[:,dim]
-                B = self.BS.basismatrix(X=data, nr_splines=nr_splines, l=order, knot_type=knot_types)["basis"]
+                B = np.zeros((len(data), nr_splines))
+                for j in range(order, len(knots)-1):
+                    B[:,j-order] = self.BS.basisfunction(data, knots, j, order).ravel()
             elif type_.startswith("t"):
                 dim1, dim2 = int(type_[2])-1, int(type_[4])-1
                 data = Xpred[:,[dim1, dim2]]
-                B = self.BS.tensorproduct_basismatrix(X=data, nr_splines=nr_splines, l=order, knot_type=knot_types)["basis"]
+                n_samples = len(data[:,0])
+                B1, B2 = np.zeros((n_samples, len(knots["k1"])-1-order[0])), np.zeros((n_samples, len(knots["k2"])-1-order[1]))
+                B = np.zeros((n_samples, np.prod(nr_splines)))
+                for j in range(order[0], len(knots["k1"])-1):
+                    B1[:,j-order[0]] = self.BS.basisfunction(data[:,0], knots["k1"], j, order[0]) 
+                for j in range(order[1], len(knots["k2"])-1):
+                    B2[:,j-order[1]] = self.BS.basisfunction(data[:,1], knots["k2"], j, order[1]) 
+                for i in range(n_samples):
+                    B[i,:] = np.kron(B2[i,:], B1[i,:])    
             else:
                 print("Only B-splines (s) and tensor-product B-splines (t) are supported!")
             basis.append(B)
-
         # create combined basis matrix
         B = np.concatenate(basis, axis=1)
         y = B @ coef_
 
-        return dict(ypred=y, basis=B)
+        return y
 
 
         

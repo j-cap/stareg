@@ -3,12 +3,13 @@
 
 import PySimpleGUI as sg
 import pandas as pd
+import numpy as np
 from matplotlib import use as use_agg
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import time
 
-from stareg import star_model
+from stareg import Stareg
 
 FONT = "Helvetica 14"
 CONSTR = ('inc', 'dec', 'peak', 'valley', 'conc', 'conv', 'none')
@@ -35,7 +36,7 @@ def load_data():
         return (df, headers, fname.split("/")[-1])
     except Exception:
         sg.popup("Error reading file, try again")
-        window1.close()
+        # window1.close()
 
 def fit_data():
     # Button to get the parameter values for the model and fit it
@@ -90,7 +91,7 @@ def save_model(model):
 def draw_figure(canvas, figure):
     figure_canvas_agg = FigureCanvasTkAgg(figure, canvas)
     figure_canvas_agg.draw()
-    figure_canvas_agg.get_tk_widget().pack(side='top', fill='both', expand=1)
+    figure_canvas_agg.get_tk_widget().pack() #side='top', fill='both', expand=1)
     return figure_canvas_agg
 
 def delete_fig_agg(fig):
@@ -128,9 +129,12 @@ while True:
         if type(df) == pd.DataFrame:
             window["-loaded-"].update(f"Dataset loaded: {fname}")
         
-        time.sleep(0.1)
-        ax.scatter(df["x"],df["y"], c="r")
-        ax.scatter(df["x"],df["ytrue"], c="g")
+        time.sleep(0.1)  # Plot the loaded dataset
+        if 'fig_canvas_agg' in locals():
+            delete_fig_agg(fig_canvas_agg)
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(16,9))           
+        ax.scatter(df["x"],df["y"], c="r", marker="x")
+        ax.scatter(df["x"],df["ytrue"], c="k", marker="1")
         ax.legend(["Noisy Data", "True Data"])
         ax.set_title(f"Dataset {fname}")
         ax.grid()
@@ -145,20 +149,22 @@ while True:
         nr_splines, constraint, knot_type = fit_data()
         time.sleep(0.2)
         descr = ( ("s(1)", nr_splines, constraint, 6000, knot_type), )
-        # get data
-        X, y = df["x"].values.reshape((-1,1)), df["y"].values
-        # fit model
-        print(f"Model Description: \n {descr}".center(20, "-"))
-        model = star_model(descr=descr, X=X, y=y)
-        # plot fit
-        delete_fig_agg(fig_canvas_agg)
+        X, y = df["x"].values.reshape((-1,1)), df["y"].values     # get data
+        print(f"Model Description: \n {descr}".center(20, "-"))   # fit model
+        STAREG = Stareg()
+        model = STAREG.fit(description=descr, X=X, y=y)
+        Xpred = np.linspace(X.min(), X.max(), 100)
+        ypred = STAREG.predict(Xpred.reshape(-1,1), model["model"], model["coef_"])
+        if 'fig_canvas_agg' in locals():
+            delete_fig_agg(fig_canvas_agg)          # plot fit
         fig, axs = plt.subplots(nrows=2, ncols=1, sharex=True, figsize=(16,9), gridspec_kw={"height_ratios":[0.8,0.2]})
         ax1, ax2 = axs
-        ax1.scatter(df["x"], df["y"], c="black", marker="x")
-        ax1.scatter(df["x"], model["basis"]@model["coef_"], c="blue", marker="o")
-        ax1.legend(["Data", "Fit"])
+        ax1.scatter(df["x"], df["y"], c="k", marker="x", label="Data")
+        ax1.scatter(df["x"], df["ytrue"], c="red", marker="1", label="True Function")
+        ax1.plot(Xpred, ypred, c="blue", label="Fit")
+        ax1.legend()
         ax1.grid()
-        ax2.scatter(df["x"], df["y"] - model["basis"]@model["coef_"], c="red")
+        ax2.scatter(df["x"], df["y"] - model["B"]@model["coef_"], c="red", marker="1")
         ax2.legend(["Residual"])
         ax2.grid()
         fig_canvas_agg = draw_figure(window['-CANVAS-'].TKCanvas, fig)
