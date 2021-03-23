@@ -361,7 +361,7 @@ class Bspline():
             i += 1
             df = pd.concat([df, pd.DataFrame(data=coef_pls)], axis=1)
 
-        return dict(coef_=coef_pls, basis=B, knots=k, lambdas=(lam, lam_c), df_coef=df)
+        return dict(coef_=coef_pls, basis=B, knots=k, lambdas=(lam, lam_c), df_coef=df, K=Dc.T@np.diag(v)@Dc)
 
     # legacy code
     def fit_SC_TP_Pspline(self, X, y, constraints=("none", "none"), nr_splines=(10, 10), l=(3,3), knot_type=("e","e"), lam_c=(6000, 6000)):
